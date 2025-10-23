@@ -8,7 +8,7 @@
   <ul id="product-list"></ul>
 
   <script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzNss38vumFyzma3zizjHFRBME4rhhAKz8LntC0GGD9foEKvNZZME13JMBQ3ViNSQEdkw/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwwrWnI8VLccNQlaQ12PXcS07J5w_k6_sZVXTxxTsyeIusHo30RaNSlEAqeLhaa4pwKiQ/exec";
 
     // Fetch products
     fetch(GAS_URL)
