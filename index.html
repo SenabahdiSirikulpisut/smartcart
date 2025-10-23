@@ -11,6 +11,7 @@
   .products { margin-top: 20px; }
   .product { background: #fff; padding: 10px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
   .summary { background: #e0f7fa; padding: 10px; margin-top: 20px; border-radius: 6px; }
+  #reader { width: 100%; margin-top: 20px; }
 </style>
 </head>
 <body>
@@ -26,43 +27,50 @@
   
   <hr>
   <button onclick="scanQRCode()">Scan QR Code in Area</button>
-  
-  <div id="reader" style="width:100%; margin-top:20px;"></div>
+  <div id="reader"></div>
+
   <div class="products" id="products"></div>
+  
   <div class="summary" id="summary" style="display:none;"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-
 <script>
-const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLgrP8Gn-fIMq9q5ZDq9yFnspG7dmxtsAonApUt4_mNtU0QnIpOQPoKP7fieNQN49BS1lZfJiLYgBeYk1l3sXu8VO3VCBACD26JT8899Bh-zrujMxctGDWHODE06ctbT641rmFODnkwfCZNvV2_mg2z8r05Q4FfhYzNqq11q-vDsH_xsA2EbCGjy2Mbs0Ma-Aojw1EMW_-EUIFm3uCQFSGeZ8rIchxBlhOnaVswV8HUkwXln2dDDI2lD8-uagOrG6MRbykFWFypRlRngBJHwBiFWW2kKTquOkMP6p5qX&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt";
+const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLgrP8Gn-fIMq9q5ZDq9yFnspG7dmxtsAonApUt4_mNtU0QnIpOQPoKP7fieNQN49BS1lZfJiLYgBeYk1l3sXu8VO3VCBACD26JT8899Bh-zrujMxctGDWHODE06ctbT641rmFODnkwfCZNvV2_mg2z8r05Q4FfhYzNqq11q-vDsH_xsA2EbCGjy2Mbs0Ma-Aojw1EMW_-EUIFm3uCQFSGeZ8rIchxBlhOnaVswV8HUkwXln2dDDI2lD8-uagOrG6MRbykFWFypRlRngBJHwBiFWW2kKTquOkMP6p5qX&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt"; // replace with your GAS webapp URL
 let customerId = null;
 let segment = null;
 
-// JSONP helper
-function jsonp(url, params, callbackName) {
-  const query = Object.keys(params).map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`).join("&");
-  const cb = callbackName || `cb_${Date.now()}`;
-  return new Promise((resolve) => {
-    window[cb] = function(data) {
-      resolve(data);
-      delete window[cb];
+// ---- JSONP utility ----
+function jsonpRequest(params) {
+  const cbName = "cb_" + Math.random().toString(36).substring(2,15);
+  return new Promise((resolve, reject) => {
+    window[cbName] = function(response) {
+      resolve(response);
+      delete window[cbName];
       script.remove();
     };
+    const query = Object.entries(params)
+      .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
     const script = document.createElement("script");
-    script.src = `${url}?${query}&callback=${cb}`;
+    script.src = `${BACKEND_URL}?${query}&callback=${cbName}`;
+    script.onerror = () => { reject("JSONP request failed"); };
     document.body.appendChild(script);
   });
 }
 
 // ---- Start session ----
-async function startSession() {
+function startSession() {
   customerId = prompt("Enter your Customer ID");
-  if(!customerId) return alert("Customer ID required!");
+  if(!customerId) return alert("Customer ID is required!");
   segment = document.getElementById('segment').value;
 
-  await jsonp(BACKEND_URL, { action: "startSession", customerId, segment });
-  alert("Session started! Scan QR codes to get recommendations.");
+  jsonpRequest({ action: "startSession", customerId, segment })
+    .then(data => {
+      alert("Session started! Let's start shopping!");
+      fetchSummary(); // initial summary
+    })
+    .catch(err => alert("Failed to start session: " + err));
 }
 
 // ---- QR Code scan ----
@@ -73,80 +81,91 @@ function scanQRCode() {
       html5QrCode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: 250 },
-        async qrCodeMessage => {
-          await fetchProducts(qrCodeMessage);
+        qrCodeMessage => {
+          fetchProducts(qrCodeMessage);
           html5QrCode.stop();
         },
         errorMessage => {}
       );
-    }
+    } else alert("No camera found");
   }).catch(err => alert("Camera error: " + err));
 }
 
 // ---- Fetch products for QR zone ----
-async function fetchProducts(zoneToken) {
-  const data = await jsonp(BACKEND_URL, { action: "getProducts" });
-  const container = document.getElementById('products');
-  container.innerHTML = "";
-
-  data.products.forEach(p => {
-    const div = document.createElement('div');
-    div.className = "product";
-    div.innerHTML = `
-      <b>${p.name}</b> (${p.category})<br>
-      Calories: ${p.calories} | Protein: ${p.protein} | Sugar: ${p.sugar}<br>
-      Price: ${p.price}<br>
-      <button onclick="recordClick('${p.productId}')">View / Click</button>
-    `;
-    container.appendChild(div);
-  });
+function fetchProducts(zoneToken) {
+  jsonpRequest({ action: "getProducts" })
+    .then(data => {
+      const container = document.getElementById('products');
+      container.innerHTML = "";
+      data.products.forEach(p => {
+        container.appendChild(createProductDiv(p));
+      });
+    })
+    .catch(err => alert("Failed to fetch products: " + err));
 }
 
-// ---- Record click and fetch recommendations ----
-async function recordClick(productId) {
-  await jsonp(BACKEND_URL, { action: "recordClick", customerId, productId, segment, action:"click" });
-  await fetchRecommendations(productId);
+// ---- Create product div ----
+function createProductDiv(p) {
+  const div = document.createElement('div');
+  div.className = "product";
+  div.innerHTML = `
+    <b>${p.name}</b> (${p.category})<br>
+    Calories: ${p.calories} | Protein: ${p.protein} | Sugar: ${p.sugar}<br>
+    Price: ${p.price}<br>
+    <button onclick="handleProductClick('${p.productId}')">View / Click</button>
+  `;
+  return div;
+}
+
+// ---- Handle product click ----
+function handleProductClick(productId) {
+  jsonpRequest({ action: "recordClick", customerId, productId, segment, action:"click" })
+    .then(() => {
+      fetchRecommendations(productId);
+      fetchSummary(); // update summary automatically
+    })
+    .catch(err => alert("Failed to record click: " + err));
 }
 
 // ---- Fetch recommendations ----
-async function fetchRecommendations(productId) {
-  const data = await jsonp(BACKEND_URL, { action: "getRecommendations", productId });
-  if (!data.recommendations || data.recommendations.length === 0) return;
-
-  const container = document.getElementById('products');
-  const recDiv = document.createElement('div');
-  recDiv.innerHTML = `<h4>Recommended Products:</h4>`;
-
-  data.recommendations.forEach(p => {
-    const div = document.createElement('div');
-    div.className = "product";
-    div.innerHTML = `
-      <b>${p.name}</b> (${p.category})<br>
-      Calories: ${p.calories} | Protein: ${p.protein} | Sugar: ${p.sugar}<br>
-      Price: ${p.price}<br>
-      <button onclick="recordClick('${p.productId}')">View / Click</button>
-    `;
-    recDiv.appendChild(div);
-  });
-  container.appendChild(recDiv);
+function fetchRecommendations(productId) {
+  jsonpRequest({ action: "getRecommendations", productId })
+    .then(data => {
+      if (!data.recommendations || data.recommendations.length === 0) return;
+      const container = document.getElementById('products');
+      const recDiv = document.createElement('div');
+      recDiv.innerHTML = `<h4>Recommended Products:</h4>`;
+      data.recommendations.forEach(p => {
+        recDiv.appendChild(createProductDiv(p));
+      });
+      container.appendChild(recDiv);
+    })
+    .catch(err => alert("Failed to fetch recommendations: " + err));
 }
 
 // ---- Fetch summary ----
-async function fetchSummary() {
-  const data = await jsonp(BACKEND_URL, { action: "getSummary", customerId });
-  const sumDiv = document.getElementById('summary');
-  sumDiv.style.display = "block";
-  sumDiv.innerHTML = "<h4>Summary</h4>";
-
-  if (segment === "Nutrition") {
-    const n = data.summary.Nutrition;
-    sumDiv.innerHTML += `Calories: ${n.calories}, Protein: ${n.protein}, Sugar: ${n.sugar}`;
-  } else if (segment === "Budget") {
-    sumDiv.innerHTML += `Total Spent: ${data.summary.Budget.total}`;
-  } else if (segment === "Household") {
-    sumDiv.innerHTML += "Checklist: " + data.summary.Household.checklist.join(", ");
-  }
+function fetchSummary() {
+  if(!customerId) return;
+  jsonpRequest({ action: "getSummary", customerId })
+    .then(data => {
+      const sumDiv = document.getElementById('summary');
+      sumDiv.style.display = "block";
+      sumDiv.innerHTML = "<h4>Summary</h4>";
+      const custSummary = data.summary[customerId];
+      if(!custSummary) return sumDiv.innerHTML += "No data yet.";
+      
+      if (segment === "Nutrition") {
+        const n = custSummary.Nutrition;
+        sumDiv.innerHTML += `Calories: ${n.calories}, Protein: ${n.protein}, Sugar: ${n.sugar}`;
+      } else if (segment === "Budget") {
+        sumDiv.innerHTML += `Total Spent: ${custSummary.Budget.total}`;
+      } else if (segment === "Household") {
+        sumDiv.innerHTML += "Checklist: " + custSummary.Household.checklist.join(", ");
+      }
+    })
+    .catch(err => console.log("Failed to fetch summary: " + err));
 }
 </script>
 </body>
 </html>
+
