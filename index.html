@@ -1,42 +1,157 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Smart Cart</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Cart</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+  header { background: #007BFF; color: white; padding: 1rem; text-align: center; }
+  main { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+  #products { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
+  .product { background: white; padding: 0.5rem; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+  .product:hover { background: #e0f0ff; }
+  #summary { background: white; padding: 1rem; border-radius: 8px; }
+  #login-section { display: flex; flex-direction: column; gap: 0.5rem; }
+  button { padding: 0.5rem 1rem; border: none; border-radius: 6px; background: #007BFF; color: white; cursor: pointer;}
+  button:hover { background: #0056b3; }
+</style>
 </head>
 <body>
-  <h1>Products</h1>
-  <ul id="product-list"></ul>
 
-  <script>
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwwrWnI8VLccNQlaQ12PXcS07J5w_k6_sZVXTxxTsyeIusHo30RaNSlEAqeLhaa4pwKiQ/exec";
+<header>
+  <h1>Smart Cart</h1>
+</header>
 
-    // Fetch products
-    fetch(GAS_URL)
-      .then(res => res.json())
-      .then(products => {
-        const list = document.getElementById('product-list');
-        products.forEach(p => {
-          const li = document.createElement('li');
-          li.textContent = p.Name + " - " + p.Price;
-          li.addEventListener('click', () => logClick(p.Name));
-          list.appendChild(li);
-        });
-      });
+<main>
 
-    // Log click
-    function logClick(productName) {
-      const data = {
-        customer: "Customer_1",
-        product: productName,
-        timestamp: new Date().toISOString()
-      };
+  <!-- QR Login -->
+  <div id="login-section">
+    <label for="customerId">Enter Customer ID:</label>
+    <input type="text" id="customerId" placeholder="e.g., CUST001">
+    
+    <label for="segment">Select Segment:</label>
+    <select id="segment">
+      <option value="Nutrition">Goal Achiever (Nutrition)</option>
+      <option value="Budget">Budget Lover</option>
+      <option value="Household">Household & Checklist</option>
+    </select>
+    
+    <button id="loginBtn">Start Session</button>
+  </div>
 
-      fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify(data)
-      }).then(res => res.json())
-        .then(console.log);
-    }
-  </script>
+  <!-- Products -->
+  <div id="products"></div>
+
+  <!-- Summary -->
+  <div id="summary">
+    <h3>Summary</h3>
+    <pre id="summaryText">No data yet</pre>
+    <button id="refreshSummary">Refresh Summary</button>
+  </div>
+
+</main>
+
+<script>
+const backendURL = 'https://script.google.com/macros/s/AKfycbzhlomizLX-AjxjOlM6Zi7VLvOeLFFy9U07linCrXpvrVwRmYSifqonP63-CYqNKL6lkg/exec'; // Replace with your deployed GAS webapp URL
+
+let session = {
+  customerId: null,
+  segment: null,
+  qrToken: null
+};
+
+// --- 1. QR Login / Session Start ---
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const customerId = document.getElementById('customerId').value.trim();
+  const segment = document.getElementById('segment').value;
+
+  if (!customerId) { alert('Enter Customer ID'); return; }
+
+  const res = await fetch(backendURL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'startSession', customerId, segment }),
+  });
+  const data = await res.json();
+  
+  session.customerId = customerId;
+  session.segment = segment;
+  session.qrToken = data.qrToken;
+
+  alert('Session started! QR Token: ' + data.qrToken);
+  loadProducts();
+});
+
+// --- 2. Load Products ---
+async function loadProducts() {
+  const res = await fetch(backendURL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getProducts' }),
+  });
+  const data = await res.json();
+
+  const container = document.getElementById('products');
+  container.innerHTML = '';
+
+  data.products.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'product';
+    div.innerHTML = `<strong>${p.name}</strong><br>Category: ${p.category}<br>Price: ${p.price}`;
+    div.addEventListener('click', () => clickProduct(p));
+    container.appendChild(div);
+  });
+}
+
+// --- 3. Record Click / Track Recommendations ---
+async function clickProduct(product) {
+  if (!session.customerId) { alert('Please start a session first!'); return; }
+
+  await fetch(backendURL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'recordClick',
+      customerId: session.customerId,
+      productId: product.productId,
+      segment: session.segment,
+      action: 'click'
+    })
+  });
+
+  // Optionally, fetch updated recommendations
+  const rec = await fetchRecommendations();
+  displayRecommendations(rec);
+}
+
+// --- 4. Fetch Recommendations ---
+async function fetchRecommendations() {
+  const res = await fetch(backendURL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getRecommendations', customerId: session.customerId })
+  });
+  const data = await res.json();
+  return data.recommended;
+}
+
+// --- 5. Display Recommendations ---
+function displayRecommendations(recommended) {
+  console.log('Recommended products based on clicks:', recommended);
+  // Could highlight products or reorder the list dynamically
+}
+
+// --- 6. Summary ---
+document.getElementById('refreshSummary').addEventListener('click', async () => {
+  if (!session.customerId) { alert('Start a session first!'); return; }
+
+  const res = await fetch(backendURL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'getSummary', customerId: session.customerId })
+  });
+  const data = await res.json();
+
+  document.getElementById('summaryText').textContent = JSON.stringify(data.summary, null, 2);
+});
+
+</script>
+
 </body>
 </html>
