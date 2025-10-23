@@ -21,6 +21,7 @@
 </div>
 
 <div class="container mt-4">
+  <!-- Setup Section -->
   <div id="setupSection" class="mb-4">
     <div class="mb-2">
       <label for="customerId" class="form-label">Enter your Customer ID</label>
@@ -37,11 +38,13 @@
     <button id="startSessionBtn" class="btn btn-success w-100">Start My Session</button>
   </div>
 
+  <!-- Scanner Section -->
   <div id="scannerSection" style="display:none;">
     <button id="scanQRBtn" class="btn btn-scan mb-3">📷 Scan Shelf QR</button>
     <div id="reader" style="width:100%;"></div>
   </div>
 
+  <!-- Product List -->
   <div id="productList" class="mt-3"></div>
 </div>
 
@@ -60,8 +63,23 @@
 <script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
 
 <script>
-const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLgZVmIU_iPnrAgkBVIr6IBMQW1j9-QuhA8Wo7WrcK1GU9CMm_we2XnX4IW5uD4RupAR83H2hmYXq275y6fETcTiHB6UavSgTkFVZwp2vKPs8L7-VtInay4Nf4xSTMteojaJYsfiEcEdt7kEHlx15GPEo1dPLXXwQDRdCpdf2hDk9e1uIYP3L6SXlAo1o_W1YU7nhzVW7oMPI0IAsrDIX6miEqaFzEl9LS9RzxOZfzdeFTcGoRnsH2GbNB8jyStOOMJ9BmG7xpyg-38SSklXmoUzsY2oVgtginH-jiDY&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt"; // e.g. https://script.google.com/macros/s/XXXX/exec
+const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLgZVmIU_iPnrAgkBVIr6IBMQW1j9-QuhA8Wo7WrcK1GU9CMm_we2XnX4IW5uD4RupAR83H2hmYXq275y6fETcTiHB6UavSgTkFVZwp2vKPs8L7-VtInay4Nf4xSTMteojaJYsfiEcEdt7kEHlx15GPEo1dPLXXwQDRdCpdf2hDk9e1uIYP3L6SXlAo1o_W1YU7nhzVW7oMPI0IAsrDIX6miEqaFzEl9LS9RzxOZfzdeFTcGoRnsH2GbNB8jyStOOMJ9BmG7xpyg-38SSklXmoUzsY2oVgtginH-jiDY&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt";
 let customerId = "", segment = "";
+
+// --- JSONP Loader ---
+function loadJSONP(url, callbackName) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    window[callbackName] = (data) => {
+      resolve(data);
+      document.body.removeChild(script);
+      delete window[callbackName];
+    };
+    script.src = `${url}&callback=${callbackName}`;
+    script.onerror = () => reject(new Error('Network error'));
+    document.body.appendChild(script);
+  });
+}
 
 // --- Start Session ---
 document.getElementById("startSessionBtn").addEventListener("click", async () => {
@@ -70,8 +88,11 @@ document.getElementById("startSessionBtn").addEventListener("click", async () =>
   if (!customerId) return alert("Please enter your Customer ID.");
 
   try {
-    const res = await fetch(`${BACKEND_URL}?action=startSession&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(segment)}`);
-    const data = await res.json();
+    const data = await loadJSONP(
+      `${BACKEND_URL}?action=startSession&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(segment)}`,
+      'handleStartSession'
+    );
+
     if (data.status === "ok") {
       new bootstrap.Modal(document.getElementById('sessionModal')).show();
       document.getElementById("setupSection").style.display = "none";
@@ -98,11 +119,13 @@ document.getElementById("scanQRBtn").addEventListener("click", () => {
   );
 });
 
-// --- Handle QR Result ---
+// --- Handle QR Scan Result ---
 async function handleQRCode(token) {
   try {
-    const res = await fetch(`${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}`);
-    const data = await res.json();
+    const data = await loadJSONP(
+      `${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}`,
+      'handleRecommendations'
+    );
     displayProducts(data.recommendations || []);
   } catch (err) {
     alert("QR scan failed: " + err);
@@ -133,22 +156,19 @@ function displayProducts(products) {
 }
 
 // --- Record Click ---
-async function recordClick(productId) {
-  try {
-    await fetch(BACKEND_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "recordClick",
-        customerId,
-        productId,
-        segment,
-        action: "click"
-      })
-    });
-    alert("Product interaction recorded!");
-  } catch (err) {
-    alert("Failed to record click: " + err);
-  }
+function recordClick(productId) {
+  const params = new URLSearchParams({
+    action: 'recordClick',
+    customerId,
+    productId,
+    segment,
+    clickAction: 'click' // avoid duplicate 'action'
+  }).toString();
+
+  const callbackName = 'handleRecordClick_' + Date.now();
+  loadJSONP(`${BACKEND_URL}?${params}`, callbackName)
+    .then(() => alert("Product interaction recorded!"))
+    .catch(err => alert("Failed to record click: " + err));
 }
 </script>
 
