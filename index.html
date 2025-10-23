@@ -1,110 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Cart</title>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<style>
-body { font-family: sans-serif; padding: 10px; }
-.hidden { display: none; }
-.product-card { border: 1px solid #ccc; padding: 10px; margin: 5px; border-radius: 5px; }
-#summary { position: fixed; right: 0; top: 0; width: 200px; background: #f9f9f9; padding: 10px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Cart</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+    header { background: #4CAF50; color: white; padding: 10px; text-align: center; }
+    main { padding: 10px; }
+    .segment-btn { margin: 5px; padding: 10px 20px; font-size: 16px; }
+    .product-card { border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    .product-card button { margin-top: 5px; }
+    #summary { position: fixed; right: 0; top: 0; width: 250px; height: 100%; background: #f9f9f9; border-left: 1px solid #ccc; padding: 10px; overflow-y: auto; display: none; }
+    #qrModal { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); display:none; justify-content:center; align-items:center; }
+    #qrModal video { width:80%; max-width:400px; }
+    .closeModal { position:absolute; top:10px; right:20px; color:white; font-size:24px; cursor:pointer; }
+  </style>
 </head>
 <body>
+  <header>
+    <h1>Welcome to Smart Cart</h1>
+    <p>Select your segment and start exploring!</p>
+  </header>
+  <main>
+    <div id="segmentSelection">
+      <button class="segment-btn" data-segment="Nutrition">Goal Achiever (Nutrition)</button>
+      <button class="segment-btn" data-segment="Budget">Budget Lover</button>
+      <button class="segment-btn" data-segment="Household">Household Checklist</button>
+    </div>
 
-<h2>Welcome to Smart Cart</h2>
+    <div>
+      <button id="scanQR">Scan Shelf QR Code</button>
+    </div>
 
-<div id="segment-selection">
-  <p>Select your segment:</p>
-  <button onclick="startSession('Nutrition')">Goal-Achiever (Nutrition)</button>
-  <button onclick="startSession('Budget')">Budget Lover</button>
-  <button onclick="startSession('Household')">Household / Houseware</button>
-</div>
+    <div id="productsList"></div>
+  </main>
 
-<div id="qr-scanner" class="hidden">
-  <h3>Scan QR code on shelf</h3>
-  <div id="reader" style="width:100%;"></div>
-</div>
+  <div id="summary">
+    <h3>Summary</h3>
+    <div id="summaryContent"></div>
+    <button id="closeSummary">Close</button>
+  </div>
 
-<div id="products" class="hidden"></div>
+  <!-- QR Scanner Modal -->
+  <div id="qrModal">
+    <span class="closeModal" id="closeQR">&times;</span>
+    <video id="qrVideo" autoplay></video>
+  </div>
 
-<div id="summary" class="hidden">
-  <h4>Summary</h4>
-  <pre id="summary-content"></pre>
-  <button onclick="fetchSummary()">Refresh Summary</button>
-</div>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbx-Ribyq8sWI2NTHoRAR61O_9gF4F2lGrvhZp2KvEehV7dcAIlFuz3Lyria8qYfRvF6lA/exec"; // replace with your deployed GAS URL
+    let customerId = prompt("Enter your Customer ID:"); // simple login
+    let segment = null;
+    let activeQRToken = null;
 
-<script>
-const BACKEND = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhoPoM5T9VlKjEtjGaYJxqzrkBiJjjER_CoN7vD-z5T3zqIUY9Nk_nDhhvUfUtnVd8mmSnBbpDp7Wm9YZ2j7dLv_2917cTK9vwTYXobd_e15VxKBaTCGlhasVPXEmdv1jFq3px--RSKVn5SykSO9bqgHO58yhWz6zGqiISkt2r_XKcZjY89ezsOMQK4Gul0rdAJdG0ESuRNhDkjMhCVGl1Ekv-wAwLG-8TRDU3XOTCuBEh8XNtyDSCOgPw67pZB_FR0zq1on7oz2Gn73CMoFQIW8ZvWcdP8kytmi7EL&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt";
-let customerId = "cust_" + Math.floor(Math.random()*100000);
-let currentSegment = "";
-let lastQRToken = "";
-
-function startSession(segment) {
-  currentSegment = segment;
-  fetch(BACKEND, {
-    method: "POST",
-    body: JSON.stringify({ action:"startSession", customerId, segment })
-  }).then(r=>r.json()).then(()=> {
-    document.getElementById('segment-selection').classList.add('hidden');
-    document.getElementById('qr-scanner').classList.remove('hidden');
-    initQRScanner();
-  });
-}
-
-function initQRScanner() {
-  const html5QrCode = new Html5Qrcode("reader");
-  html5QrCode.start(
-    { facingMode: "environment" },
-    { fps: 10, qrbox: 250 },
-    qrCodeMessage => {
-      lastQRToken = qrCodeMessage;
-      document.getElementById('qr-scanner').classList.add('hidden');
-      fetch(BACKEND, {
-        method: "POST",
-        body: JSON.stringify({ action:"scanQR", customerId, qrToken:lastQRToken })
-      }).then(()=> fetchProducts());
-      html5QrCode.stop();
-    },
-    errorMessage => { /* ignore scan errors */ }
-  );
-}
-
-function fetchProducts() {
-  fetch(BACKEND, {
-    method: "POST",
-    body: JSON.stringify({ action:"getProducts", customerId, segment:currentSegment, qrToken:lastQRToken })
-  }).then(r=>r.json()).then(data => {
-    const container = document.getElementById('products');
-    container.innerHTML = "";
-    data.products.forEach(p=>{
-      const div = document.createElement('div');
-      div.className = "product-card";
-      div.innerHTML = `<b>${p.name}</b><br>Category: ${p.category}<br>Price: ${p.price}<br>Calories: ${p.calories}, Protein: ${p.protein}, Sugar: ${p.sugar}<br><button onclick="recordClick('${p.productId}')">Click</button>`;
-      container.appendChild(div);
+    const segmentBtns = document.querySelectorAll(".segment-btn");
+    segmentBtns.forEach(btn => {
+      btn.addEventListener("click", () => {
+        segment = btn.dataset.segment;
+        startSession();
+        fetchProducts();
+      });
     });
-    container.classList.remove('hidden');
-    document.getElementById('summary').classList.remove('hidden');
-  });
-}
 
-function recordClick(productId) {
-  fetch(BACKEND, {
-    method: "POST",
-    body: JSON.stringify({ action:"recordClick", customerId, productId, segment:currentSegment, qrToken:lastQRToken, action:"click" })
-  }).then(()=> fetchProducts()); // refresh products with recommendations
-}
+    // Start session
+    function startSession() {
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "startSession", customerId, segment }),
+        headers: { "Content-Type": "application/json" }
+      }).then(res => res.json()).then(data => {
+        console.log("Session started:", data);
+      });
+    }
 
-function fetchSummary() {
-  fetch(BACKEND, {
-    method: "POST",
-    body: JSON.stringify({ action:"getSummary", customerId })
-  }).then(r=>r.json()).then(data=>{
-    document.getElementById('summary-content').textContent = JSON.stringify(data.summary, null, 2);
-  });
-}
-</script>
+    // Fetch products
+    function fetchProducts() {
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getProducts" }),
+        headers: { "Content-Type": "application/json" }
+      }).then(res => res.json()).then(data => {
+        displayProducts(data.products);
+      });
+    }
+
+    function displayProducts(products) {
+      const container = document.getElementById("productsList");
+      container.innerHTML = "";
+      products
+        .filter(p => p.category === segment)
+        .forEach(p => {
+          const div = document.createElement("div");
+          div.className = "product-card";
+          div.innerHTML = `
+            <strong>${p.name}</strong> <br>
+            Calories: ${p.calories}, Protein: ${p.protein}g, Sugar: ${p.sugar}g <br>
+            Price: ${p.price} <br>
+            <button data-id="${p.productId}">View / Click</button>
+          `;
+          div.querySelector("button").addEventListener("click", () => {
+            recordClick(p.productId);
+          });
+          container.appendChild(div);
+        });
+    }
+
+    // Record click
+    function recordClick(productId) {
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "recordClick", customerId, productId, segment, action: "click" }),
+        headers: { "Content-Type": "application/json" }
+      }).then(res => res.json()).then(() => {
+        fetchRecommendations(productId);
+        fetchSummary();
+      });
+    }
+
+    // Fetch recommendations
+    function fetchRecommendations(productId) {
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getRecommendations", customerId, productId }),
+        headers: { "Content-Type": "application/json" }
+      }).then(res => res.json()).then(data => {
+        if(data.recommendations.length){
+          const container = document.getElementById("productsList");
+          data.recommendations.forEach(p => {
+            const div = document.createElement("div");
+            div.className = "product-card";
+            div.innerHTML = `<strong>Recommended: ${p.name}</strong><br>
+              Calories: ${p.calories}, Protein: ${p.protein}g, Sugar: ${p.sugar}g<br>
+              Price: ${p.price}`;
+            container.appendChild(div);
+          });
+        }
+      });
+    }
+
+    // Fetch summary
+    function fetchSummary() {
+      fetch(API_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "getSummary" }),
+        headers: { "Content-Type": "application/json" }
+      }).then(res => res.json()).then(data => {
+        const content = document.getElementById("summaryContent");
+        if(data.summary[customerId]){
+          const s = data.summary[customerId];
+          content.innerHTML = `
+            <strong>Nutrition:</strong> Calories: ${s.Nutrition.calories}, Protein: ${s.Nutrition.protein}g, Sugar: ${s.Nutrition.sugar}g<br>
+            <strong>Budget:</strong> Total Spent: ${s.Budget.total}<br>
+            <strong>Household Checklist:</strong> ${s.Household.checklist.join(", ")}
+          `;
+        }
+      });
+      document.getElementById("summary").style.display = "block";
+    }
+
+    document.getElementById("closeSummary").addEventListener("click", () => {
+      document.getElementById("summary").style.display = "none";
+    });
+
+    // QR Code Scanner
+    const qrModal = document.getElementById("qrModal");
+    const qrVideo = document.getElementById("qrVideo");
+    document.getElementById("scanQR").addEventListener("click", () => {
+      qrModal.style.display = "flex";
+      const html5QrCode = new Html5Qrcode("qrVideo");
+      html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 },
+        qrCodeMessage => {
+          activeQRToken = qrCodeMessage;
+          qrModal.style.display = "none";
+          html5QrCode.stop();
+          alert("QR Code scanned! You can now see recommendations for this shelf.");
+          fetchProducts(); // refresh products if needed
+        },
+        errorMessage => { /* ignore scan errors */ }
+      );
+    });
+    document.getElementById("closeQR").addEventListener("click", () => {
+      qrModal.style.display = "none";
+    });
+  </script>
 </body>
 </html>
