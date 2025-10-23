@@ -4,154 +4,107 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Smart Cart</title>
+<script src="https://unpkg.com/html5-qrcode"></script>
 <style>
-  body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-  header { background: #007BFF; color: white; padding: 1rem; text-align: center; }
-  main { padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
-  #products { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
-  .product { background: white; padding: 0.5rem; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
-  .product:hover { background: #e0f0ff; }
-  #summary { background: white; padding: 1rem; border-radius: 8px; }
-  #login-section { display: flex; flex-direction: column; gap: 0.5rem; }
-  button { padding: 0.5rem 1rem; border: none; border-radius: 6px; background: #007BFF; color: white; cursor: pointer;}
-  button:hover { background: #0056b3; }
+body { font-family: sans-serif; padding: 10px; }
+.hidden { display: none; }
+.product-card { border: 1px solid #ccc; padding: 10px; margin: 5px; border-radius: 5px; }
+#summary { position: fixed; right: 0; top: 0; width: 200px; background: #f9f9f9; padding: 10px; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Smart Cart</h1>
-</header>
+<h2>Welcome to Smart Cart</h2>
 
-<main>
+<div id="segment-selection">
+  <p>Select your segment:</p>
+  <button onclick="startSession('Nutrition')">Goal-Achiever (Nutrition)</button>
+  <button onclick="startSession('Budget')">Budget Lover</button>
+  <button onclick="startSession('Household')">Household / Houseware</button>
+</div>
 
-  <!-- QR Login -->
-  <div id="login-section">
-    <label for="customerId">Enter Customer ID:</label>
-    <input type="text" id="customerId" placeholder="e.g., CUST001">
-    
-    <label for="segment">Select Segment:</label>
-    <select id="segment">
-      <option value="Nutrition">Goal Achiever (Nutrition)</option>
-      <option value="Budget">Budget Lover</option>
-      <option value="Household">Household & Checklist</option>
-    </select>
-    
-    <button id="loginBtn">Start Session</button>
-  </div>
+<div id="qr-scanner" class="hidden">
+  <h3>Scan QR code on shelf</h3>
+  <div id="reader" style="width:100%;"></div>
+</div>
 
-  <!-- Products -->
-  <div id="products"></div>
+<div id="products" class="hidden"></div>
 
-  <!-- Summary -->
-  <div id="summary">
-    <h3>Summary</h3>
-    <pre id="summaryText">No data yet</pre>
-    <button id="refreshSummary">Refresh Summary</button>
-  </div>
-
-</main>
+<div id="summary" class="hidden">
+  <h4>Summary</h4>
+  <pre id="summary-content"></pre>
+  <button onclick="fetchSummary()">Refresh Summary</button>
+</div>
 
 <script>
-const backendURL = 'https://script.google.com/macros/s/AKfycbzhlomizLX-AjxjOlM6Zi7VLvOeLFFy9U07linCrXpvrVwRmYSifqonP63-CYqNKL6lkg/exec'; // Replace with your deployed GAS webapp URL
+const BACKEND = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhoPoM5T9VlKjEtjGaYJxqzrkBiJjjER_CoN7vD-z5T3zqIUY9Nk_nDhhvUfUtnVd8mmSnBbpDp7Wm9YZ2j7dLv_2917cTK9vwTYXobd_e15VxKBaTCGlhasVPXEmdv1jFq3px--RSKVn5SykSO9bqgHO58yhWz6zGqiISkt2r_XKcZjY89ezsOMQK4Gul0rdAJdG0ESuRNhDkjMhCVGl1Ekv-wAwLG-8TRDU3XOTCuBEh8XNtyDSCOgPw67pZB_FR0zq1on7oz2Gn73CMoFQIW8ZvWcdP8kytmi7EL&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt";
+let customerId = "cust_" + Math.floor(Math.random()*100000);
+let currentSegment = "";
+let lastQRToken = "";
 
-let session = {
-  customerId: null,
-  segment: null,
-  qrToken: null
-};
-
-// --- 1. QR Login / Session Start ---
-document.getElementById('loginBtn').addEventListener('click', async () => {
-  const customerId = document.getElementById('customerId').value.trim();
-  const segment = document.getElementById('segment').value;
-
-  if (!customerId) { alert('Enter Customer ID'); return; }
-
-  const res = await fetch(backendURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'startSession', customerId, segment }),
-  });
-  const data = await res.json();
-  
-  session.customerId = customerId;
-  session.segment = segment;
-  session.qrToken = data.qrToken;
-
-  alert('Session started! QR Token: ' + data.qrToken);
-  loadProducts();
-});
-
-// --- 2. Load Products ---
-async function loadProducts() {
-  const res = await fetch(backendURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'getProducts' }),
-  });
-  const data = await res.json();
-
-  const container = document.getElementById('products');
-  container.innerHTML = '';
-
-  data.products.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'product';
-    div.innerHTML = `<strong>${p.name}</strong><br>Category: ${p.category}<br>Price: ${p.price}`;
-    div.addEventListener('click', () => clickProduct(p));
-    container.appendChild(div);
+function startSession(segment) {
+  currentSegment = segment;
+  fetch(BACKEND, {
+    method: "POST",
+    body: JSON.stringify({ action:"startSession", customerId, segment })
+  }).then(r=>r.json()).then(()=> {
+    document.getElementById('segment-selection').classList.add('hidden');
+    document.getElementById('qr-scanner').classList.remove('hidden');
+    initQRScanner();
   });
 }
 
-// --- 3. Record Click / Track Recommendations ---
-async function clickProduct(product) {
-  if (!session.customerId) { alert('Please start a session first!'); return; }
-
-  await fetch(backendURL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'recordClick',
-      customerId: session.customerId,
-      productId: product.productId,
-      segment: session.segment,
-      action: 'click'
-    })
-  });
-
-  // Optionally, fetch updated recommendations
-  const rec = await fetchRecommendations();
-  displayRecommendations(rec);
+function initQRScanner() {
+  const html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    qrCodeMessage => {
+      lastQRToken = qrCodeMessage;
+      document.getElementById('qr-scanner').classList.add('hidden');
+      fetch(BACKEND, {
+        method: "POST",
+        body: JSON.stringify({ action:"scanQR", customerId, qrToken:lastQRToken })
+      }).then(()=> fetchProducts());
+      html5QrCode.stop();
+    },
+    errorMessage => { /* ignore scan errors */ }
+  );
 }
 
-// --- 4. Fetch Recommendations ---
-async function fetchRecommendations() {
-  const res = await fetch(backendURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'getRecommendations', customerId: session.customerId })
+function fetchProducts() {
+  fetch(BACKEND, {
+    method: "POST",
+    body: JSON.stringify({ action:"getProducts", customerId, segment:currentSegment, qrToken:lastQRToken })
+  }).then(r=>r.json()).then(data => {
+    const container = document.getElementById('products');
+    container.innerHTML = "";
+    data.products.forEach(p=>{
+      const div = document.createElement('div');
+      div.className = "product-card";
+      div.innerHTML = `<b>${p.name}</b><br>Category: ${p.category}<br>Price: ${p.price}<br>Calories: ${p.calories}, Protein: ${p.protein}, Sugar: ${p.sugar}<br><button onclick="recordClick('${p.productId}')">Click</button>`;
+      container.appendChild(div);
+    });
+    container.classList.remove('hidden');
+    document.getElementById('summary').classList.remove('hidden');
   });
-  const data = await res.json();
-  return data.recommended;
 }
 
-// --- 5. Display Recommendations ---
-function displayRecommendations(recommended) {
-  console.log('Recommended products based on clicks:', recommended);
-  // Could highlight products or reorder the list dynamically
+function recordClick(productId) {
+  fetch(BACKEND, {
+    method: "POST",
+    body: JSON.stringify({ action:"recordClick", customerId, productId, segment:currentSegment, qrToken:lastQRToken, action:"click" })
+  }).then(()=> fetchProducts()); // refresh products with recommendations
 }
 
-// --- 6. Summary ---
-document.getElementById('refreshSummary').addEventListener('click', async () => {
-  if (!session.customerId) { alert('Start a session first!'); return; }
-
-  const res = await fetch(backendURL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'getSummary', customerId: session.customerId })
+function fetchSummary() {
+  fetch(BACKEND, {
+    method: "POST",
+    body: JSON.stringify({ action:"getSummary", customerId })
+  }).then(r=>r.json()).then(data=>{
+    document.getElementById('summary-content').textContent = JSON.stringify(data.summary, null, 2);
   });
-  const data = await res.json();
-
-  document.getElementById('summaryText').textContent = JSON.stringify(data.summary, null, 2);
-});
-
+}
 </script>
-
 </body>
 </html>
