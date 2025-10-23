@@ -1,171 +1,201 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Cart WebApp</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SmartCart WebApp</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-  body { font-family: Arial, sans-serif; padding: 10px; background: #f9f9f9; }
-  .container { max-width: 500px; margin: auto; }
-  button { padding: 10px; margin: 5px 0; width: 100%; font-size: 16px; }
-  .products { margin-top: 20px; }
-  .product { background: #fff; padding: 10px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
-  .summary { background: #e0f7fa; padding: 10px; margin-top: 20px; border-radius: 6px; }
-  #reader { width: 100%; margin-top: 20px; }
+  body{font-family:Arial,Helvetica,sans-serif;background:#f9f9f9;padding:12px}
+  .container{max-width:520px;margin:auto}
+  .product{background:#fff;padding:12px;margin-bottom:10px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .summary{background:#e9f7ff;padding:10px;border-radius:8px;margin-top:12px}
+  #reader{width:100%;margin-top:12px}
 </style>
 </head>
 <body>
 <div class="container">
-  <h2>Welcome to Smart Cart</h2>
-  <p>Select your segment:</p>
-  <select id="segment">
-    <option value="Nutrition">Nutrition / Goal Achiever</option>
-    <option value="Budget">Budget Lover</option>
-    <option value="Household">Household / Checklist</option>
-  </select>
-  <button onclick="startSession()">Start Session</button>
-  
-  <hr>
-  <button onclick="scanQRCode()">Scan QR Code in Area</button>
+  <h3>Smart Cart</h3>
+  <p>Select your segment and start session. Scan shelf QR codes to see area recommendations.</p>
+
+  <div class="mb-2">
+    <label class="form-label">Segment</label>
+    <select id="segment" class="form-select">
+      <option value="Nutrition">Nutrition / Goal Achiever</option>
+      <option value="Budget">Budget Lover</option>
+      <option value="Household">Household / Checklist</option>
+    </select>
+  </div>
+
+  <div class="d-grid gap-2 mb-2">
+    <button id="startBtn" class="btn btn-primary">Start Session</button>
+    <button id="scanBtn" class="btn btn-outline-secondary">Scan QR Code in Area</button>
+  </div>
+
   <div id="reader"></div>
 
-  <div class="products" id="products"></div>
-  
-  <div class="summary" id="summary" style="display:none;"></div>
+  <div id="products" class="mt-3"></div>
+
+  <button id="summaryBtn" class="btn btn-info mt-3">Refresh Summary</button>
+  <div id="summary" class="summary" style="display:none"></div>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
-const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLgrP8Gn-fIMq9q5ZDq9yFnspG7dmxtsAonApUt4_mNtU0QnIpOQPoKP7fieNQN49BS1lZfJiLYgBeYk1l3sXu8VO3VCBACD26JT8899Bh-zrujMxctGDWHODE06ctbT641rmFODnkwfCZNvV2_mg2z8r05Q4FfhYzNqq11q-vDsH_xsA2EbCGjy2Mbs0Ma-Aojw1EMW_-EUIFm3uCQFSGeZ8rIchxBlhOnaVswV8HUkwXln2dDDI2lD8-uagOrG6MRbykFWFypRlRngBJHwBiFWW2kKTquOkMP6p5qX&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt"; // replace with your GAS webapp URL
+/*
+  SmartCart frontend:
+  - Uses POST JSON to BACKEND_URL (apps script web app exec)
+  - Follows the 7-Eleven model: POST with JSON body, server responds JSON
+  - Change BACKEND_URL to your deployed Web App exec URL
+*/
+const BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLiBqqcQCqUoeR0mViTkrxqWBDkwjz4SVIDp0xy_hUP9JyXdhbrHle_HozvBUW-7FUqcXpvyFu1iYz2FTpJrHbmvMDpVo2lCIUkq_D2Tn_pgepWhu1ghhjbLd8tMWUodI0MpKHp6pGvo0JH-zazGEXXdQRwRPLnxqd7vOfSEdP2DlGo5Z8UX3m8QutmytCcVCzxNk4xi0Z9wVXJBO7MisBFP8bZ7fzHesmQtLV58M-x2Eg9d8CeBuz5CCi0-z5ZmQDT2lenkGe568W9BXZSJTOt1HUpyRoD_8zqcZEHs&lib=M453lqMolX3z0uh-KbEC2B1RunvdIjpyt"; // <-- REPLACE
 let customerId = null;
 let segment = null;
 
-// ---- JSONP utility ----
-function jsonpRequest(params) {
-  const cbName = "cb_" + Math.random().toString(36).substring(2,15);
-  return new Promise((resolve, reject) => {
-    window[cbName] = function(response) {
-      resolve(response);
-      delete window[cbName];
-      script.remove();
-    };
-    const query = Object.entries(params)
-      .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-      .join("&");
-    const script = document.createElement("script");
-    script.src = `${BACKEND_URL}?${query}&callback=${cbName}`;
-    script.onerror = () => { reject("JSONP request failed"); };
-    document.body.appendChild(script);
+// helper: POST JSON
+async function postJson(payload) {
+  const res = await fetch(BACKEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+// Start session
+document.getElementById('startBtn').addEventListener('click', async () => {
+  if (!customerId) {
+    customerId = prompt("Enter your Customer ID (or leave blank to auto-generate)");
+    if (!customerId) customerId = 'guest_' + Math.random().toString(36).slice(2,8);
+  }
+  segment = document.getElementById('segment').value;
+  try {
+    const r = await postJson({ action: "startSession", customerId, segment });
+    if (r.status === 'ok') {
+      alert("Session started! Let's start shopping 🛒");
+      fetchSummary();
+    } else {
+      alert("Failed to start session: " + (r.error || r.message || JSON.stringify(r)));
+    }
+  } catch (err) {
+    alert("Network error starting session: " + err);
+  }
+});
+
+// QR scan
+document.getElementById('scanBtn').addEventListener('click', scanQRCode);
+async function scanQRCode() {
+  const readerDiv = document.getElementById('reader');
+  readerDiv.innerHTML = ''; // placeholder for camera
+  const html5QrCode = new Html5Qrcode("reader");
+  try {
+    const cameras = await Html5Qrcode.getCameras();
+    if (!cameras || !cameras.length) { alert("No camera available"); return; }
+    await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 },
+      async qrMessage => {
+        // qrMessage is your zone token or shelf id
+        html5QrCode.stop().catch(()=>{});
+        fetchProducts(qrMessage);
+      },
+      err => { /* ignore frame errors */ }
+    );
+  } catch (err) {
+    alert("Camera error: " + err);
+  }
+}
+
+// Fetch products (optionally use zone token to filter later)
+async function fetchProducts(zoneToken) {
+  try {
+    const r = await postJson({ action: "getProducts", qrToken: zoneToken });
+    renderProducts(r.products || []);
+  } catch (err) {
+    alert("Failed to fetch products: " + err);
+  }
+}
+
+function renderProducts(products) {
+  const cont = document.getElementById('products');
+  cont.innerHTML = "";
+  products.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'product';
+    div.innerHTML = `
+      <div><strong>${escapeHtml(p.name)}</strong> <small>(${escapeHtml(p.category)})</small></div>
+      <div>Calories: ${p.calories} | Protein: ${p.protein}g | Sugar: ${p.sugar}g</div>
+      <div>Price: ${p.price}</div>
+      <div class="mt-2"><button class="btn btn-sm btn-primary" onclick="clickProduct('${p.productId}')">View / Click</button>
+      <button class="btn btn-sm btn-outline-secondary ms-2" onclick="getRecs('${p.productId}')">See Recommendations</button></div>
+    `;
+    cont.appendChild(div);
   });
 }
 
-// ---- Start session ----
-function startSession() {
-  customerId = prompt("Enter your Customer ID");
-  if(!customerId) return alert("Customer ID is required!");
-  segment = document.getElementById('segment').value;
-
-  jsonpRequest({ action: "startSession", customerId, segment })
-    .then(data => {
-      alert("Session started! Let's start shopping!");
-      fetchSummary(); // initial summary
-    })
-    .catch(err => alert("Failed to start session: " + err));
+// click product => record click + update summary + show recs
+async function clickProduct(productId) {
+  if (!customerId) return alert("Start a session first");
+  try {
+    await postJson({ action: "recordClick", customerId, productId, segment, action: "click" });
+    await fetchSummary();
+    await getRecs(productId);
+  } catch (err) {
+    alert("Error recording click: " + err);
+  }
 }
 
-// ---- QR Code scan ----
-function scanQRCode() {
-  const html5QrCode = new Html5Qrcode("reader");
-  Html5Qrcode.getCameras().then(cameras => {
-    if (cameras && cameras.length) {
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
-        qrCodeMessage => {
-          fetchProducts(qrCodeMessage);
-          html5QrCode.stop();
-        },
-        errorMessage => {}
-      );
-    } else alert("No camera found");
-  }).catch(err => alert("Camera error: " + err));
+// get recommendations for a product
+async function getRecs(productId) {
+  try {
+    const r = await postJson({ action: "getRecommendations", productId });
+    if (!r.recommendations || !r.recommendations.length) return;
+    // append recommendations block
+    const cont = document.getElementById('products');
+    const recDiv = document.createElement('div');
+    recDiv.className = 'product';
+    recDiv.innerHTML = '<h5>Recommended</h5>';
+    r.recommendations.forEach(p => {
+      const pEl = document.createElement('div');
+      pEl.innerHTML = `
+        <div><strong>${escapeHtml(p.name)}</strong> <small>(${escapeHtml(p.category)})</small></div>
+        <div>Calories: ${p.calories} | Protein: ${p.protein}g | Sugar: ${p.sugar}g</div>
+        <div>Price: ${p.price}</div>
+        <div class="mt-2"><button class="btn btn-sm btn-primary" onclick="clickProduct('${p.productId}')">View / Click</button></div>
+        <hr />
+      `;
+      recDiv.appendChild(pEl);
+    });
+    cont.appendChild(recDiv);
+  } catch (err) {
+    alert("Failed to get recommendations: " + err);
+  }
 }
 
-// ---- Fetch products for QR zone ----
-function fetchProducts(zoneToken) {
-  jsonpRequest({ action: "getProducts" })
-    .then(data => {
-      const container = document.getElementById('products');
-      container.innerHTML = "";
-      data.products.forEach(p => {
-        container.appendChild(createProductDiv(p));
-      });
-    })
-    .catch(err => alert("Failed to fetch products: " + err));
+// Summary
+document.getElementById('summaryBtn').addEventListener('click', fetchSummary);
+async function fetchSummary() {
+  if (!customerId) return alert("Start a session first");
+  try {
+    const r = await postJson({ action: "getSummary", customerId });
+    const sum = r.summary && r.summary[customerId];
+    const sumDiv = document.getElementById('summary');
+    sumDiv.style.display = 'block';
+    if (!sum) {
+      sumDiv.innerHTML = "<strong>No interactions yet.</strong>";
+      return;
+    }
+    if (segment === 'Nutrition') {
+      sumDiv.innerHTML = `<strong>Nutrition summary</strong><div>Calories: ${sum.Nutrition.calories}</div><div>Protein: ${sum.Nutrition.protein} g</div><div>Sugar: ${sum.Nutrition.sugar} g</div>`;
+    } else if (segment === 'Budget') {
+      sumDiv.innerHTML = `<strong>Savings / Total</strong><div>Total spent (approx): ${sum.Budget.total}</div>`;
+    } else {
+      sumDiv.innerHTML = `<strong>Household checklist</strong><div>${(sum.Household.checklist || []).join(", ")}</div>`;
+    }
+  } catch (err) {
+    alert("Failed to fetch summary: " + err);
+  }
 }
 
-// ---- Create product div ----
-function createProductDiv(p) {
-  const div = document.createElement('div');
-  div.className = "product";
-  div.innerHTML = `
-    <b>${p.name}</b> (${p.category})<br>
-    Calories: ${p.calories} | Protein: ${p.protein} | Sugar: ${p.sugar}<br>
-    Price: ${p.price}<br>
-    <button onclick="handleProductClick('${p.productId}')">View / Click</button>
-  `;
-  return div;
-}
-
-// ---- Handle product click ----
-function handleProductClick(productId) {
-  jsonpRequest({ action: "recordClick", customerId, productId, segment, action:"click" })
-    .then(() => {
-      fetchRecommendations(productId);
-      fetchSummary(); // update summary automatically
-    })
-    .catch(err => alert("Failed to record click: " + err));
-}
-
-// ---- Fetch recommendations ----
-function fetchRecommendations(productId) {
-  jsonpRequest({ action: "getRecommendations", productId })
-    .then(data => {
-      if (!data.recommendations || data.recommendations.length === 0) return;
-      const container = document.getElementById('products');
-      const recDiv = document.createElement('div');
-      recDiv.innerHTML = `<h4>Recommended Products:</h4>`;
-      data.recommendations.forEach(p => {
-        recDiv.appendChild(createProductDiv(p));
-      });
-      container.appendChild(recDiv);
-    })
-    .catch(err => alert("Failed to fetch recommendations: " + err));
-}
-
-// ---- Fetch summary ----
-function fetchSummary() {
-  if(!customerId) return;
-  jsonpRequest({ action: "getSummary", customerId })
-    .then(data => {
-      const sumDiv = document.getElementById('summary');
-      sumDiv.style.display = "block";
-      sumDiv.innerHTML = "<h4>Summary</h4>";
-      const custSummary = data.summary[customerId];
-      if(!custSummary) return sumDiv.innerHTML += "No data yet.";
-      
-      if (segment === "Nutrition") {
-        const n = custSummary.Nutrition;
-        sumDiv.innerHTML += `Calories: ${n.calories}, Protein: ${n.protein}, Sugar: ${n.sugar}`;
-      } else if (segment === "Budget") {
-        sumDiv.innerHTML += `Total Spent: ${custSummary.Budget.total}`;
-      } else if (segment === "Household") {
-        sumDiv.innerHTML += "Checklist: " + custSummary.Household.checklist.join(", ");
-      }
-    })
-    .catch(err => console.log("Failed to fetch summary: " + err));
-}
+function escapeHtml(s){ return String(s||"").replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c])); }
 </script>
 </body>
 </html>
-
