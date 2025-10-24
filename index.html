@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SmartCart</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <script defer src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
 <style>
-  body { background: #f8f9fa; padding: 1rem; font-family: 'Poppins', sans-serif; }
+  body { background: #f8f9fa; padding: 1rem; }
   #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; }
   .product-card { transition: transform 0.2s ease-in-out; }
   .product-card:hover { transform: scale(1.03); }
@@ -21,7 +21,7 @@
 <div id="loginSection" class="card p-3 shadow-sm">
   <div class="mb-3">
     <label class="form-label">Customer ID</label>
-    <input type="text" id="customerId" class="form-control" placeholder="Enter your ID" />
+    <input type="text" id="customerId" class="form-control" placeholder="Enter your ID">
   </div>
   <div class="mb-3">
     <label class="form-label">Shopping Focus</label>
@@ -41,7 +41,7 @@
   <button id="stopScan" class="btn btn-danger">Stop Scanning</button>
 </div>
 
-<!-- Recommendations -->
+<!-- Recommendations Section -->
 <div id="recommendationsSection" class="mt-4 d-none">
   <h5>Recommended for You</h5>
   <div id="recommendations" class="row g-3"></div>
@@ -58,7 +58,8 @@
   </div>
 </div>
 
-<script defer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
 
 const loginSection = document.getElementById("loginSection");
@@ -71,113 +72,30 @@ let customerId = "";
 let focus = "";
 let sessionId = "";
 
+// Wait for DOM
 window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("startSession").addEventListener("click", async () => {
     customerId = document.getElementById("customerId").value.trim();
     focus = document.getElementById("focus").value;
-    if (!customerId) return alert("Please enter Customer ID.");
+    if(!customerId) return alert("Please enter Customer ID.");
     await startSession(customerId, focus);
   });
 
   document.getElementById("stopScan").addEventListener("click", async () => {
-    if (html5QrCode) {
+    if(html5QrCode) {
       await html5QrCode.stop();
       html5QrCode.clear();
     }
     scannerSection.classList.add("d-none");
     loginSection.classList.remove("d-none");
   });
-
-  document.getElementById("startZoneScan").addEventListener("click", async () => {
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('sessionModal')).hide();
-    scannerSection.classList.remove("d-none");
-    await startScanner();
-  });
 });
 
-// === START SESSION ===
-async function startSession(customerId, focus) {
-  try {
-    const data = await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&segment=${focus}`);
-    if(data.sessionId) sessionId = data.sessionId;
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('sessionModal')).show();
-  } catch (err) {
-    console.error(err);
-    alert("Failed to start session. Please check your connection.");
-  }
-}
-
-// === QR SCANNER ===
-async function startScanner() {
-  html5QrCode = new Html5Qrcode("reader");
-  const config = { fps: 10, qrbox: 250 };
-  try {
-    await html5QrCode.start(
-      { facingMode: "environment" },
-      config,
-      async (decodedText) => {
-        console.log("✅ Scanned:", decodedText);
-        await handleScan(decodedText);
-      },
-      (errorMsg) => {}
-    );
-  } catch (err) {
-    console.error("QR Scanner Error:", err);
-    alert("Unable to access camera. Please allow permissions or reload.");
-  }
-}
-
-// === HANDLE SCAN ===
-async function handleScan(productId) {
-  try {
-    const recData = await jsonp(`${BACKEND_URL}?action=getRecommendations&productId=${productId}&sessionId=${sessionId}&segment=${focus}`);
-    showRecommendations(recData.recommendations || []);
-    // record click for analytics
-    recordClick(productId);
-  } catch (err) {
-    console.error("Error fetching recommendations:", err);
-  }
-}
-
-// === SHOW RECOMMENDATIONS ===
-function showRecommendations(products) {
-  recommendationsSection.classList.remove("d-none");
-  recommendationsContainer.innerHTML = "";
-  if (!products || products.length === 0) {
-    recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
-    return;
-  }
-  products.forEach((p) => {
-    const card = document.createElement("div");
-    card.className = "col-md-4";
-    card.innerHTML = `
-      <div class="card product-card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <h6>${p.name || "Unnamed Product"}</h6>
-          <p class="small text-muted">${p.category || ""}</p>
-          <button class="btn btn-outline-primary btn-sm" data-id="${p.productId}">View</button>
-        </div>
-      </div>`;
-    card.querySelector("button").addEventListener("click", () => recordClick(p.productId));
-    recommendationsContainer.appendChild(card);
-  });
-}
-
-// === RECORD CLICK ===
-async function recordClick(productId) {
-  try {
-    await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&sessionId=${sessionId}&productId=${productId}&segment=${focus}`);
-    console.log("Click recorded:", productId);
-  } catch (err) {
-    console.error("Error recording click:", err);
-  }
-}
-
-// === JSONP HELPER ===
+// JSONP helper
 function jsonp(url) {
   return new Promise((resolve, reject) => {
-    const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
-    window[callbackName] = (data) => {
+    const callbackName = "jsonp_callback_" + Math.round(100000*Math.random());
+    window[callbackName] = data => {
       delete window[callbackName];
       document.body.removeChild(script);
       resolve(data);
@@ -188,7 +106,93 @@ function jsonp(url) {
     document.body.appendChild(script);
   });
 }
+
+// Start session
+async function startSession(customerId, focus) {
+  try {
+    const data = await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&segment=${focus}`);
+    if(data.sessionId) sessionId = data.sessionId;
+
+    const modalEl = document.getElementById('sessionModal');
+    const modal = new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false});
+    modal.show();
+
+    document.getElementById('startZoneScan').onclick = async () => {
+      modal.hide();
+      scannerSection.classList.remove('d-none');
+      await startScanner();
+    };
+  } catch(err) {
+    console.error(err);
+    alert("Failed to start session. Please check your connection.");
+  }
+}
+
+// Start QR Scanner
+async function startScanner() {
+  const qrRegionId = "reader";
+  html5QrCode = new Html5Qrcode(qrRegionId);
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+  try {
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      async decodedText => { await handleScan(decodedText); },
+      errorMsg => { /* no QR found yet */ }
+    );
+  } catch(err) {
+    console.error("QR Scanner Error:", err);
+    alert("Unable to access camera. Please allow permissions or reload.");
+  }
+}
+
+// Handle QR scan
+async function handleScan(productCode) {
+  try {
+    const recData = await jsonp(`${BACKEND_URL}?action=getRecommendations&productId=${productCode}&sessionId=${sessionId}&segment=${focus}`);
+    showRecommendations(recData.recommendations || []);
+  } catch(err) {
+    console.error("Error fetching recommendations:", err);
+  }
+}
+
+// Show recommendations
+function showRecommendations(products) {
+  recommendationsSection.classList.remove('d-none');
+  recommendationsContainer.innerHTML = "";
+
+  if(!products.length) {
+    recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
+    return;
+  }
+
+  products.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "col-md-4";
+    card.innerHTML = `
+      <div class="card product-card h-100 shadow-sm">
+        <div class="card-body text-center">
+          <h6>${p.name}</h6>
+          <p class="small text-muted">${p.category}</p>
+          <p>฿${p.price}</p>
+          <button class="btn btn-outline-primary btn-sm" data-id="${p.productId}">View</button>
+        </div>
+      </div>
+    `;
+    card.querySelector("button").addEventListener("click", () => recordClick(p.productId));
+    recommendationsContainer.appendChild(card);
+  });
+}
+
+// Record click
+async function recordClick(productId) {
+  try {
+    await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&productId=${productId}&sessionId=${sessionId}&segment=${focus}`);
+    console.log("Click recorded:", productId);
+  } catch(err) {
+    console.error("Error recording click:", err);
+  }
+}
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
