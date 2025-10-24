@@ -5,29 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SmartCart</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <!-- ✅ Load QR Code library first -->
   <script defer src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
   <style>
-    body {
-      background-color: #f8f9fa;
-      padding: 1rem;
-    }
-    #reader {
-      width: 100%;
-      max-width: 400px;
-      margin: 0 auto;
-      border-radius: 1rem;
-      overflow: hidden;
-    }
-    .product-card {
-      transition: transform 0.2s ease-in-out;
-    }
-    .product-card:hover {
-      transform: scale(1.03);
-    }
+    body { background-color: #f8f9fa; padding: 1rem; }
+    #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; }
+    .product-card { transition: transform 0.2s ease-in-out; }
+    .product-card:hover { transform: scale(1.03); }
+    .summary-card { margin-top: 1rem; }
   </style>
 </head>
-
 <body class="container py-4">
   <h2 class="text-center mb-4">🛒 SmartCart</h2>
 
@@ -55,67 +41,111 @@
     <button id="stopScan" class="btn btn-danger mt-3">Stop Scanning</button>
   </div>
 
-  <!-- Recommendations -->
+  <!-- Recommendations Section -->
   <div id="recommendationsSection" class="mt-4 d-none">
     <h5>Recommended for You</h5>
     <div id="recommendations" class="row g-3"></div>
   </div>
 
-  <!-- ✅ SmartCart Script -->
+  <!-- Session Summary Section -->
+  <div id="summarySection" class="mt-4 d-none">
+    <h5>Session Summary</h5>
+    <div class="row">
+      <div class="col-md-4 summary-card">
+        <div class="card p-2 shadow-sm text-center">
+          <h6>Nutrition</h6>
+          <p>Calories: <span id="calories">0</span></p>
+          <p>Protein: <span id="protein">0</span>g</p>
+          <p>Sugar: <span id="sugar">0</span>g</p>
+        </div>
+      </div>
+      <div class="col-md-4 summary-card">
+        <div class="card p-2 shadow-sm text-center">
+          <h6>Budget</h6>
+          <p>Total Spent: $<span id="budgetTotal">0</span></p>
+        </div>
+      </div>
+      <div class="col-md-4 summary-card">
+        <div class="card p-2 shadow-sm text-center">
+          <h6>Household</h6>
+          <ul id="householdList" class="list-unstyled"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script defer>
-    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbysYt8uHJqGkdFQ0bDZ-7G4bl4JxBZE3sONhsom7_6rVIWiapMdJpB1OmJvzfEjFM2lgw/exec"; // replace with your actual Google Apps Script web app URL
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
 
     const loginSection = document.getElementById("loginSection");
     const scannerSection = document.getElementById("scannerSection");
     const recommendationsSection = document.getElementById("recommendationsSection");
     const recommendationsContainer = document.getElementById("recommendations");
+    const summarySection = document.getElementById("summarySection");
+    const caloriesEl = document.getElementById("calories");
+    const proteinEl = document.getElementById("protein");
+    const sugarEl = document.getElementById("sugar");
+    const budgetEl = document.getElementById("budgetTotal");
+    const householdListEl = document.getElementById("householdList");
 
     let html5QrCode;
     let customerId = "";
     let focus = "";
+    let sessionId = "";
 
-    // Wait until html5-qrcode is available
     window.addEventListener("DOMContentLoaded", () => {
-      const startSessionBtn = document.getElementById("startSession");
-      startSessionBtn.addEventListener("click", async () => {
+      document.getElementById("startSession").addEventListener("click", async () => {
         customerId = document.getElementById("customerId").value.trim();
         focus = document.getElementById("focus").value;
-
-        if (!customerId) return alert("Please enter Customer ID.");
-
+        if(!customerId) return alert("Please enter Customer ID.");
         await startSession(customerId, focus);
       });
 
       document.getElementById("stopScan").addEventListener("click", async () => {
-        if (html5QrCode) {
+        if(html5QrCode) {
           await html5QrCode.stop();
           html5QrCode.clear();
         }
         scannerSection.classList.add("d-none");
         loginSection.classList.remove("d-none");
+        summarySection.classList.add("d-none");
       });
     });
 
-    // === START SESSION ===
-    async function startSession(customerId, focus) {
-      try {
-        await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&focus=${focus}`);
+    // === JSONP Helper ===
+    function jsonp(url){
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
+        window[callbackName] = (data) => { delete window[callbackName]; script.remove(); resolve(data); };
+        const script = document.createElement("script");
+        script.src = url + "&callback=" + callbackName;
+        script.onerror = () => { reject("JSONP failed"); };
+        document.body.appendChild(script);
+      });
+    }
+
+    // === Start Session ===
+    async function startSession(customerId, focus){
+      try{
+        const data = await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&segment=${focus}`);
+        if(!data.sessionId) throw "No session returned";
+        sessionId = data.sessionId;
         loginSection.classList.add("d-none");
         scannerSection.classList.remove("d-none");
+        summarySection.classList.remove("d-none");
         startScanner();
-      } catch (err) {
+        updateSummary(); // fetch initial summary
+      } catch(err){
         console.error(err);
         alert("Failed to start session. Please check your connection.");
       }
     }
 
-    // === QR SCANNER ===
-    async function startScanner() {
-      const qrRegionId = "reader";
-      html5QrCode = new Html5Qrcode(qrRegionId);
-
-      const config = { fps: 10, qrbox: 250 };
-      try {
+    // === QR Scanner ===
+    async function startScanner(){
+      html5QrCode = new Html5Qrcode("reader");
+      const config = { fps:10, qrbox:250 };
+      try{
         await html5QrCode.start(
           { facingMode: "environment" },
           config,
@@ -123,37 +153,36 @@
             console.log("✅ Scanned:", decodedText);
             await handleScan(decodedText);
           },
-          (errorMsg) => {
-            // Scanner active but no QR detected
-          }
+          (errorMsg)=>{}
         );
-      } catch (err) {
+      } catch(err){
         console.error("QR Scanner Error:", err);
         alert("Unable to access camera. Please allow permissions or reload.");
       }
     }
 
-    // === HANDLE SCAN ===
-    async function handleScan(productCode) {
-      try {
-        const recData = await jsonp(`${BACKEND_URL}?action=getRecommendations&productCode=${productCode}&focus=${focus}`);
-        showRecommendations(recData);
-      } catch (err) {
-        console.error("Error fetching recommendations:", err);
+    // === Handle QR Scan ===
+    async function handleScan(productCode){
+      try{
+        // Record click
+        await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&sessionId=${sessionId}&productId=${productCode}&segment=${focus}`);
+        updateSummary();
+        const recData = await jsonp(`${BACKEND_URL}?action=getRecommendations&productId=${productCode}&sessionId=${sessionId}&segment=${focus}`);
+        showRecommendations(recData.recommendations || []);
+      } catch(err){
+        console.error("Error handling scan:", err);
       }
     }
 
-    // === SHOW RECOMMENDATIONS ===
-    function showRecommendations(products) {
+    // === Show Recommendations ===
+    function showRecommendations(products){
       recommendationsSection.classList.remove("d-none");
       recommendationsContainer.innerHTML = "";
-
-      if (!products || products.length === 0) {
+      if(!products.length){
         recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
         return;
       }
-
-      products.forEach((p) => {
+      products.forEach(p=>{
         const card = document.createElement("div");
         card.className = "col-md-4";
         card.innerHTML = `
@@ -161,39 +190,40 @@
             <div class="card-body text-center">
               <h6>${p.name || "Unnamed Product"}</h6>
               <p class="small text-muted">${p.category || ""}</p>
-              <button class="btn btn-outline-primary btn-sm" data-id="${p.id}">View</button>
+              <button class="btn btn-outline-primary btn-sm" data-id="${p.productId}">View</button>
             </div>
           </div>
         `;
-        card.querySelector("button").addEventListener("click", () => recordClick(p.id));
+        card.querySelector("button").addEventListener("click", ()=>recordClick(p.productId));
         recommendationsContainer.appendChild(card);
       });
     }
 
-    // === RECORD CLICK ===
-    async function recordClick(productId) {
-      try {
-        await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&productId=${productId}`);
+    // === Record Click ===
+    async function recordClick(productId){
+      try{
+        await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&sessionId=${sessionId}&productId=${productId}&segment=${focus}`);
+        updateSummary();
         console.log("Click recorded:", productId);
-      } catch (err) {
+      } catch(err){
         console.error("Error recording click:", err);
       }
     }
 
-    // === JSONP HELPER ===
-    function jsonp(url) {
-      return new Promise((resolve, reject) => {
-        const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
-        window[callbackName] = (data) => {
-          delete window[callbackName];
-          document.body.removeChild(script);
-          resolve(data);
-        };
-        const script = document.createElement("script");
-        script.src = `${url}&callback=${callbackName}`;
-        script.onerror = reject;
-        document.body.appendChild(script);
-      });
+    // === Update Session Summary ===
+    async function updateSummary(){
+      try{
+        const data = await jsonp(`${BACKEND_URL}?action=getSummary&customerId=${customerId}`);
+        const summary = data.summary && data.summary[customerId];
+        if(!summary) return;
+        caloriesEl.textContent = summary.Nutrition.calories;
+        proteinEl.textContent = summary.Nutrition.protein;
+        sugarEl.textContent = summary.Nutrition.sugar;
+        budgetEl.textContent = summary.Budget.total.toFixed(2);
+        householdListEl.innerHTML = summary.Household.checklist.map(i=>`<li>${i}</li>`).join("");
+      } catch(err){
+        console.error("Error updating summary:", err);
+      }
     }
   </script>
 </body>
