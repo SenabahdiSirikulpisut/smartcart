@@ -37,6 +37,7 @@
 <div id="mainScreen" class="d-none mt-4">
   <div class="d-flex justify-content-between mb-3">
     <button id="scanQRBtn" class="btn btn-success">Scan QR in Zones</button>
+    <button id="cameraTestBtn" class="btn btn-warning">Direct Camera Test</button>
     <button id="viewSummaryBtn" class="btn btn-info">View Summary</button>
   </div>
 
@@ -77,6 +78,7 @@ let focus = "";
 const loginSection = document.getElementById("loginSection");
 const mainScreen = document.getElementById("mainScreen");
 const scanQRBtn = document.getElementById("scanQRBtn");
+const cameraTestBtn = document.getElementById("cameraTestBtn");
 const viewSummaryBtn = document.getElementById("viewSummaryBtn");
 const readerDiv = document.getElementById("reader");
 const recommendationsSection = document.getElementById("recommendationsSection");
@@ -103,12 +105,13 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  scanQRBtn.addEventListener("click", () => startScanner());
+  scanQRBtn.addEventListener("click", () => startScanner(true));
+  cameraTestBtn.addEventListener("click", () => startScanner(false));
   viewSummaryBtn.addEventListener("click", () => loadSummary());
 });
 
-// === QR Scanner ===
-async function startScanner() {
+// === QR / Camera Scanner ===
+async function startScanner(isQRScan) {
   // Dynamically load QR library if not loaded
   if (!window.Html5Qrcode) {
     await new Promise((resolve, reject) => {
@@ -122,7 +125,10 @@ async function startScanner() {
 
   if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
   readerDiv.style.display = "block";
-  scanQRBtn.disabled = true;
+
+  // Disable the correct button
+  if (isQRScan) scanQRBtn.disabled = true;
+  else cameraTestBtn.disabled = true;
 
   html5QrCode.start(
     { facingMode: "environment" },
@@ -131,10 +137,16 @@ async function startScanner() {
       await html5QrCode.stop();
       html5QrCode.clear();
       readerDiv.style.display = "none";
-      scanQRBtn.disabled = false;
 
-      const recs = await fetchRecommendations(decodedText);
-      displayProducts(recs);
+      if (isQRScan) scanQRBtn.disabled = false;
+      else cameraTestBtn.disabled = false;
+
+      if (isQRScan) {
+        const recs = await fetchRecommendations(decodedText);
+        displayProducts(recs);
+      } else {
+        alert("Camera test successful!");
+      }
     },
     (err) => {}
   );
