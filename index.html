@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SmartCart</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-<script defer src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script> <!-- Load first -->
 <style>
   body { background-color: #f8f9fa; padding: 1rem; }
-  #reader, #debugVideo { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; display:none; }
+  #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; display:none; }
   .product-card { transition: transform 0.2s ease-in-out; margin-bottom: 1rem; }
   .product-card:hover { transform: scale(1.03); }
 </style>
@@ -52,20 +52,6 @@
     <h5>Session Summary</h5>
     <div id="summaryContent" class="card p-3 shadow-sm"></div>
   </div>
-
-  <!-- Camera Debug Panel -->
-  <div class="mt-4 card p-3 shadow-sm">
-    <h5>Camera Debug / Test Mode</h5>
-    <select id="debugCameraFacing" class="form-select mb-2">
-      <option value="environment">Rear (Environment)</option>
-      <option value="user">Front</option>
-    </select>
-    <button id="debugStartQr" class="btn btn-primary w-100 mb-2">Start QR Scan Test</button>
-    <button id="debugStopQr" class="btn btn-danger w-100 mb-2">Stop QR Scan Test</button>
-    <button id="debugStartDirect" class="btn btn-secondary w-100 mb-2">Start Direct Camera Test</button>
-    <video id="debugVideo" autoplay muted playsinline class="border shadow-sm mt-2"></video>
-    <pre id="debugLog" style="height:150px; overflow:auto; background:#f1f1f1; padding:5px;"></pre>
-  </div>
 </div>
 
 <!-- Session Confirmation Modal -->
@@ -81,10 +67,11 @@
   </div>
 </div>
 
-<script defer>
+<script>
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
-let html5QrCode, debugQr, debugStream;
-let customerId = "", focus = "";
+let html5QrCode;
+let customerId = "";
+let focus = "";
 
 // Elements
 const loginSection = document.getElementById("loginSection");
@@ -97,15 +84,8 @@ const recommendationsContainer = document.getElementById("recommendations");
 const summarySection = document.getElementById("summarySection");
 const summaryContent = document.getElementById("summaryContent");
 
-// Debug elements
-const debugLogElem = document.getElementById("debugLog");
-const debugVideo = document.getElementById("debugVideo");
-
-// Utility: debug log
-const debugLog = msg => { debugLogElem.textContent += msg + "\n"; debugLogElem.scrollTop = debugLogElem.scrollHeight; console.log(msg); }
-
 window.addEventListener("DOMContentLoaded", () => {
-  // Start Session
+  // Session start
   document.getElementById("startSession").addEventListener("click", async () => {
     customerId = document.getElementById("customerId").value.trim();
     focus = document.getElementById("focus").value;
@@ -125,20 +105,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
   scanQRBtn.addEventListener("click", () => startScanner());
   viewSummaryBtn.addEventListener("click", () => loadSummary());
-
-  // Debug / Camera Test
-  document.getElementById("debugStartQr").addEventListener("click", startDebugQr);
-  document.getElementById("debugStopQr").addEventListener("click", stopDebugQr);
-  document.getElementById("debugStartDirect").addEventListener("click", startDirectCamera);
-
-  // Enumerate cameras
-  navigator.mediaDevices.enumerateDevices()
-    .then(devices => devices.forEach(d => debugLog(`${d.kind}: ${d.label || d.deviceId}`)))
-    .catch(err => debugLog("❌ enumerateDevices error: " + err));
 });
 
-// === Main QR Scanner ===
+// QR Scanner
 async function startScanner() {
+  if (typeof Html5Qrcode === "undefined") { 
+    alert("QR library not loaded!");
+    return;
+  }
+
   if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
   readerDiv.style.display = "block";
   scanQRBtn.disabled = true;
@@ -155,11 +130,11 @@ async function startScanner() {
       const recs = await fetchRecommendations(decodedText);
       displayProducts(recs);
     },
-    (err) => {}
+    (err) => {} // scan errors ignored
   );
 }
 
-// === Fetch Recommendations ===
+// Fetch Recommendations
 async function fetchRecommendations(token) {
   return new Promise((resolve, reject) => {
     const callbackName = "cb_" + Date.now();
@@ -171,7 +146,7 @@ async function fetchRecommendations(token) {
   });
 }
 
-// === Record Click & Fetch Next ===
+// Record click & fetch next recommendations
 async function recordClickAndFetchNext(productId) {
   return new Promise((resolve, reject) => {
     const callbackName = "cb_" + Date.now();
@@ -183,7 +158,7 @@ async function recordClickAndFetchNext(productId) {
   });
 }
 
-// === Display Products ===
+// Display products
 function displayProducts(products) {
   recommendationsSection.classList.remove("d-none");
   recommendationsContainer.innerHTML = "";
@@ -207,7 +182,7 @@ function displayProducts(products) {
   });
 }
 
-// === Load Summary ===
+// Load Summary
 function loadSummary() {
   jsonp(`${BACKEND_URL}?action=getSummary&customerId=${customerId}`).then(data => {
     summarySection.classList.remove("d-none");
@@ -220,7 +195,7 @@ function loadSummary() {
   });
 }
 
-// === JSONP Helper ===
+// JSONP helper
 function jsonp(url) {
   return new Promise((resolve, reject) => {
     const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
@@ -230,32 +205,6 @@ function jsonp(url) {
     script.onerror = reject;
     document.body.appendChild(script);
   });
-}
-
-// === Debug / Camera Test Functions ===
-async function startDebugQr() {
-  const facing = document.getElementById("debugCameraFacing").value;
-  if (typeof Html5Qrcode === "undefined") { debugLog("❌ Html5Qrcode undefined!"); return; }
-  if (!debugQr) debugQr = new Html5Qrcode("reader");
-  readerDiv.style.display = "block";
-  debugQr.start(
-    { facingMode: facing },
-    { fps: 10, qrbox: 250 },
-    decoded => debugLog("✅ QR Scanned: " + decoded),
-    err => {}
-  ).then(() => debugLog("✅ Html5Qrcode started with facingMode=" + facing))
-  .catch(err => debugLog("❌ Html5Qrcode start error: " + err));
-}
-
-async function stopDebugQr() {
-  if (debugQr) { await debugQr.stop(); debugQr.clear(); readerDiv.style.display = "none"; debugLog("Stopped Html5Qrcode test."); }
-  if (debugStream) { debugStream.getTracks().forEach(track => track.stop()); debugVideo.srcObject = null; debugLog("Stopped direct video stream."); }
-}
-
-async function startDirectCamera() {
-  const facing = document.getElementById("debugCameraFacing").value;
-  try { debugStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } }); debugVideo.srcObject = debugStream; debugVideo.style.display="block"; debugLog("✅ getUserMedia started with facingMode=" + facing); }
-  catch(err){ debugLog("❌ getUserMedia error: " + err); }
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
