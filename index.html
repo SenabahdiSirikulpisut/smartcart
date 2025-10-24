@@ -1,198 +1,190 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SmartCart</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<script defer src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
-<style>
-  body { background: #f8f9fa; padding: 1rem; }
-  #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; }
-  .product-card { transition: transform 0.2s ease-in-out; }
-  .product-card:hover { transform: scale(1.03); }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartCart</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <script defer src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  <style>
+    body { background-color: #f8f9fa; padding: 1rem; }
+    #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; }
+    .product-card { transition: transform 0.2s ease-in-out; margin-bottom: 1rem; }
+    .product-card:hover { transform: scale(1.03); }
+  </style>
 </head>
 <body class="container py-4">
 
-<h2 class="text-center mb-4">🛒 SmartCart</h2>
+  <h2 class="text-center mb-4">🛒 SmartCart</h2>
 
-<!-- Login Section -->
-<div id="loginSection" class="card p-3 shadow-sm">
-  <div class="mb-3">
-    <label class="form-label">Customer ID</label>
-    <input type="text" id="customerId" class="form-control" placeholder="Enter your ID">
-  </div>
-  <div class="mb-3">
-    <label class="form-label">Shopping Focus</label>
-    <select id="focus" class="form-select">
-      <option value="Nutrition">Nutrition</option>
-      <option value="Budget">Budget</option>
-      <option value="Household">Household</option>
-    </select>
-  </div>
-  <button id="startSession" class="btn btn-primary w-100">Start Session</button>
-</div>
-
-<!-- Scanner Section -->
-<div id="scannerSection" class="text-center d-none mt-4">
-  <h5>Scan Product QR Code</h5>
-  <div id="reader" class="shadow mb-3"></div>
-  <button id="stopScan" class="btn btn-danger">Stop Scanning</button>
-</div>
-
-<!-- Recommendations Section -->
-<div id="recommendationsSection" class="mt-4 d-none">
-  <h5>Recommended for You</h5>
-  <div id="recommendations" class="row g-3"></div>
-</div>
-
-<!-- Session Started Modal -->
-<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content p-4 text-center">
-      <h5>✅ Session Started!</h5>
-      <p>Click below to start scanning QR codes in zones.</p>
-      <button id="startZoneScan" class="btn btn-primary mt-2">Scan QR in Zones</button>
+  <!-- Login Section -->
+  <div id="loginSection" class="card p-3 shadow-sm">
+    <div class="mb-3">
+      <label class="form-label">Customer ID</label>
+      <input type="text" id="customerId" class="form-control" placeholder="Enter your ID" />
     </div>
+    <div class="mb-3">
+      <label class="form-label">Shopping Focus</label>
+      <select id="focus" class="form-select">
+        <option value="Nutrition">Nutrition</option>
+        <option value="Budget">Budget</option>
+        <option value="Household">Household</option>
+      </select>
+    </div>
+    <button id="startSession" class="btn btn-primary w-100">Start Session</button>
   </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
+  <!-- Scanner Section -->
+  <div id="scannerSection" class="text-center d-none mt-4">
+    <button id="scanQRBtn" class="btn btn-success mb-3">Scan QR in Zones</button>
+    <div id="reader" class="shadow d-none"></div>
+  </div>
 
-const loginSection = document.getElementById("loginSection");
-const scannerSection = document.getElementById("scannerSection");
-const recommendationsSection = document.getElementById("recommendationsSection");
-const recommendationsContainer = document.getElementById("recommendations");
+  <!-- Recommendations -->
+  <div id="recommendationsSection" class="mt-4 d-none">
+    <h5>Recommended for You</h5>
+    <div id="recommendations" class="row g-3"></div>
+  </div>
 
-let html5QrCode;
-let customerId = "";
-let focus = "";
-let sessionId = "";
-
-// Wait for DOM
-window.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("startSession").addEventListener("click", async () => {
-    customerId = document.getElementById("customerId").value.trim();
-    focus = document.getElementById("focus").value;
-    if(!customerId) return alert("Please enter Customer ID.");
-    await startSession(customerId, focus);
-  });
-
-  document.getElementById("stopScan").addEventListener("click", async () => {
-    if(html5QrCode) {
-      await html5QrCode.stop();
-      html5QrCode.clear();
-    }
-    scannerSection.classList.add("d-none");
-    loginSection.classList.remove("d-none");
-  });
-});
-
-// JSONP helper
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const callbackName = "jsonp_callback_" + Math.round(100000*Math.random());
-    window[callbackName] = data => {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    const script = document.createElement("script");
-    script.src = `${url}&callback=${callbackName}`;
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-}
-
-// Start session
-async function startSession(customerId, focus) {
-  try {
-    const data = await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&segment=${focus}`);
-    if(data.sessionId) sessionId = data.sessionId;
-
-    const modalEl = document.getElementById('sessionModal');
-    const modal = new bootstrap.Modal(modalEl, {backdrop: 'static', keyboard: false});
-    modal.show();
-
-    document.getElementById('startZoneScan').onclick = async () => {
-      modal.hide();
-      scannerSection.classList.remove('d-none');
-      await startScanner();
-    };
-  } catch(err) {
-    console.error(err);
-    alert("Failed to start session. Please check your connection.");
-  }
-}
-
-// Start QR Scanner
-async function startScanner() {
-  const qrRegionId = "reader";
-  html5QrCode = new Html5Qrcode(qrRegionId);
-  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-  try {
-    await html5QrCode.start(
-      { facingMode: "environment" },
-      config,
-      async decodedText => { await handleScan(decodedText); },
-      errorMsg => { /* no QR found yet */ }
-    );
-  } catch(err) {
-    console.error("QR Scanner Error:", err);
-    alert("Unable to access camera. Please allow permissions or reload.");
-  }
-}
-
-// Handle QR scan
-async function handleScan(productCode) {
-  try {
-    const recData = await jsonp(`${BACKEND_URL}?action=getRecommendations&productId=${productCode}&sessionId=${sessionId}&segment=${focus}`);
-    showRecommendations(recData.recommendations || []);
-  } catch(err) {
-    console.error("Error fetching recommendations:", err);
-  }
-}
-
-// Show recommendations
-function showRecommendations(products) {
-  recommendationsSection.classList.remove('d-none');
-  recommendationsContainer.innerHTML = "";
-
-  if(!products.length) {
-    recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
-    return;
-  }
-
-  products.forEach(p => {
-    const card = document.createElement("div");
-    card.className = "col-md-4";
-    card.innerHTML = `
-      <div class="card product-card h-100 shadow-sm">
-        <div class="card-body text-center">
-          <h6>${p.name}</h6>
-          <p class="small text-muted">${p.category}</p>
-          <p>฿${p.price}</p>
-          <button class="btn btn-outline-primary btn-sm" data-id="${p.productId}">View</button>
+  <!-- Session Confirmation Modal -->
+  <div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-body text-center">
+          <h5>✅ Session Started</h5>
+          <p>Welcome! You can now scan QR codes to view product recommendations.</p>
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Start Shopping</button>
         </div>
       </div>
-    `;
-    card.querySelector("button").addEventListener("click", () => recordClick(p.productId));
-    recommendationsContainer.appendChild(card);
-  });
-}
+    </div>
+  </div>
 
-// Record click
-async function recordClick(productId) {
-  try {
-    await jsonp(`${BACKEND_URL}?action=recordClick&customerId=${customerId}&productId=${productId}&sessionId=${sessionId}&segment=${focus}`);
-    console.log("Click recorded:", productId);
-  } catch(err) {
-    console.error("Error recording click:", err);
-  }
-}
-</script>
+  <script defer>
+    const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
+    let html5QrCode;
+    let customerId = "";
+    let focus = "";
+
+    const loginSection = document.getElementById("loginSection");
+    const scannerSection = document.getElementById("scannerSection");
+    const recommendationsSection = document.getElementById("recommendationsSection");
+    const recommendationsContainer = document.getElementById("recommendations");
+    const scanQRBtn = document.getElementById("scanQRBtn");
+    const readerDiv = document.getElementById("reader");
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("startSession").addEventListener("click", async () => {
+        customerId = document.getElementById("customerId").value.trim();
+        focus = document.getElementById("focus").value;
+        if (!customerId) return alert("Please enter Customer ID.");
+
+        try {
+          await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&focus=${focus}`);
+          loginSection.classList.add("d-none");
+          scannerSection.classList.remove("d-none");
+          const sessionModal = new bootstrap.Modal(document.getElementById("sessionModal"));
+          sessionModal.show();
+        } catch (err) {
+          console.error(err);
+          alert("Failed to start session. Please check your connection.");
+        }
+      });
+
+      scanQRBtn.addEventListener("click", () => startScanner());
+    });
+
+    async function startScanner() {
+      if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+      readerDiv.classList.remove("d-none");
+      scanQRBtn.classList.add("d-none");
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        async (decodedText) => {
+          await html5QrCode.stop();
+          html5QrCode.clear();
+          readerDiv.classList.add("d-none");
+
+          const recs = await fetchRecommendations(decodedText);
+          displayProducts(recs);
+          scanQRBtn.classList.remove("d-none");
+        },
+        (err) => {}
+      );
+    }
+
+    async function fetchRecommendations(token) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "cb_" + Date.now();
+        window[callbackName] = (data) => {
+          delete window[callbackName];
+          resolve(data.recommendations || []);
+        };
+        const script = document.createElement("script");
+        script.src = `${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}&customerId=${customerId}&focus=${focus}&callback=${callbackName}`;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    }
+
+    async function recordClickAndFetchNext(productId) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "cb_" + Date.now();
+        window[callbackName] = (data) => {
+          delete window[callbackName];
+          resolve(data.recommendations || []);
+        };
+        const script = document.createElement("script");
+        script.src = `${BACKEND_URL}?action=recordClick&customerId=${customerId}&productId=${productId}&callback=${callbackName}`;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    }
+
+    function displayProducts(products) {
+      recommendationsSection.classList.remove("d-none");
+      recommendationsContainer.innerHTML = "";
+      if (!products.length) {
+        recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
+        return;
+      }
+
+      products.forEach(p => {
+        const card = document.createElement("div");
+        card.className = "col-md-4 product-card";
+        card.innerHTML = `
+          <div class="card h-100 shadow-sm text-center p-2">
+            <h6>${p.name}</h6>
+            <p class="small text-muted">${p.category}</p>
+            <button class="btn btn-outline-primary btn-sm">View / Add</button>
+          </div>
+        `;
+        card.querySelector("button").addEventListener("click", () => onProductClick(p.productId));
+        recommendationsContainer.appendChild(card);
+      });
+    }
+
+    async function onProductClick(productId) {
+      const recs = await recordClickAndFetchNext(productId);
+      displayProducts(recs);
+    }
+
+    function jsonp(url) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
+        window[callbackName] = (data) => {
+          delete window[callbackName];
+          document.body.removeChild(script);
+          resolve(data);
+        };
+        const script = document.createElement("script");
+        script.src = `${url}&callback=${callbackName}`;
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
