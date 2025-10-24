@@ -66,11 +66,7 @@
   </div>
 </div>
 
-<!-- Load QR library at the end to ensure full load -->
-<script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-<script>
+<script defer>
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
 
 let html5QrCode;
@@ -88,7 +84,6 @@ const recommendationsContainer = document.getElementById("recommendations");
 const summarySection = document.getElementById("summarySection");
 const summaryContent = document.getElementById("summaryContent");
 
-// Wait until DOM is loaded
 window.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("startSession").addEventListener("click", async () => {
@@ -112,15 +107,20 @@ window.addEventListener("DOMContentLoaded", () => {
   viewSummaryBtn.addEventListener("click", () => loadSummary());
 });
 
-// --- QR Scanner ---
+// === QR Scanner ===
 async function startScanner() {
+  // Dynamically load QR library if not loaded
   if (!window.Html5Qrcode) {
-    alert("QR library not loaded! Please wait a moment and try again.");
-    return;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js";
+      script.onload = resolve;
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
   }
 
   if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
-
   readerDiv.style.display = "block";
   scanQRBtn.disabled = true;
 
@@ -140,7 +140,7 @@ async function startScanner() {
   );
 }
 
-// --- Fetch Recommendations ---
+// === Fetch Recommendations from backend ===
 async function fetchRecommendations(token) {
   return new Promise((resolve, reject) => {
     const callbackName = "cb_" + Date.now();
@@ -152,7 +152,7 @@ async function fetchRecommendations(token) {
   });
 }
 
-// --- Record Click & Fetch Next ---
+// === Record click & fetch next recommendations ===
 async function recordClickAndFetchNext(productId) {
   return new Promise((resolve, reject) => {
     const callbackName = "cb_" + Date.now();
@@ -164,7 +164,7 @@ async function recordClickAndFetchNext(productId) {
   });
 }
 
-// --- Display Products ---
+// === Display products ===
 function displayProducts(products) {
   recommendationsSection.classList.remove("d-none");
   recommendationsContainer.innerHTML = "";
@@ -188,7 +188,7 @@ function displayProducts(products) {
   });
 }
 
-// --- Load Summary ---
+// === Load Summary ===
 function loadSummary() {
   jsonp(`${BACKEND_URL}?action=getSummary&customerId=${customerId}`).then(data => {
     summarySection.classList.remove("d-none");
@@ -201,7 +201,7 @@ function loadSummary() {
   });
 }
 
-// --- JSONP Helper ---
+// === JSONP helper ===
 function jsonp(url) {
   return new Promise((resolve, reject) => {
     const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
@@ -213,6 +213,7 @@ function jsonp(url) {
   });
 }
 </script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 
