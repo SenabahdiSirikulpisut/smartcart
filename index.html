@@ -1,247 +1,290 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SmartCart</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-<script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SmartCart Assistant</title>
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%9B%8D%3C/text%3E%3C/svg%3E">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
 <style>
-  body { background-color: #f8f9fa; padding: 1rem; }
-  #reader { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 1rem; overflow: hidden; display:none; }
-  .product-card { transition: transform 0.2s ease-in-out; margin-bottom: 1rem; }
-  .product-card:hover { transform: scale(1.03); }
+  body { background: #f9fafb; padding: 1rem; font-family: 'Inter', sans-serif; }
+  #reader, #debugVideo { width: 100%; max-width: 420px; margin: 0 auto 1rem auto; border-radius: 12px; overflow:hidden; display:none; background:#000; }
+  .product-card { transition: transform .14s ease-in-out; }
+  .product-card:hover { transform: translateY(-4px); }
+  #troubleshootLog { height:160px; overflow:auto; background:#fff; border:1px solid #eee; padding:.5rem; font-size:.875rem; }
+  .muted-small { font-size:.85rem; color:#6c757d; }
 </style>
 </head>
+
 <body class="container py-4">
 
-<h2 class="text-center mb-4">🛒 SmartCart</h2>
+<h3 class="text-center mb-3">🛒 SmartCart Assistant</h3>
 
-<!-- Login -->
-<div id="loginSection" class="card p-3 shadow-sm">
-  <div class="mb-3">
-    <label class="form-label">Customer ID</label>
-    <input type="text" id="customerId" class="form-control" placeholder="Enter your ID" />
+<!-- Login Section -->
+<div id="loginSection" class="card p-3 mb-3 shadow-sm">
+  <div class="mb-2">
+    <label class="form-label">Your Member ID</label>
+    <input id="customerId" class="form-control" placeholder="e.g. 7MEM1234" />
   </div>
-  <div class="mb-3">
-    <label class="form-label">Shopping Focus</label>
+  <div class="mb-2">
+    <label class="form-label">Shopping Goal</label>
     <select id="focus" class="form-select">
-      <option value="Nutrition">Nutrition</option>
-      <option value="Budget">Budget</option>
-      <option value="Household">Household</option>
+      <option>Healthy Choices</option>
+      <option>Save More</option>
+      <option>For My Home</option>
     </select>
   </div>
-  <button id="startSession" class="btn btn-primary w-100">Start Session</button>
+  <button id="startSession" class="btn btn-primary w-100">Start My Shopping Session</button>
+  <div class="mt-2 muted-small">After starting, you can scan QR zones in store to get smart suggestions.</div>
 </div>
 
 <!-- Main Screen -->
-<div id="mainScreen" class="d-none mt-4">
-  <div class="d-flex justify-content-between mb-3">
-    <button id="scanQRBtn" class="btn btn-success">Scan QR in Zones</button>
-    <button id="viewSummaryBtn" class="btn btn-info">View Summary</button>
+<div id="mainScreen" class="d-none">
+  <div class="d-flex gap-2 mb-3">
+    <button id="scanQRBtn" class="btn btn-success flex-grow-1">📷 Scan QR in Zone</button>
+    <button id="viewSummaryBtn" class="btn btn-info">📊 My Summary</button>
   </div>
 
   <div id="reader" class="shadow"></div>
 
-  <div id="recommendationsSection" class="mt-4 d-none">
-    <h5>Recommended Products</h5>
+  <div id="recommendationsSection" class="mt-3 d-none">
+    <h5>Recommended for You</h5>
     <div id="recommendations" class="row g-3"></div>
   </div>
 
-  <div id="summarySection" class="mt-4 d-none">
-    <h5>Session Summary</h5>
-    <div id="summaryContent" class="card p-3 shadow-sm"></div>
+  <div id="summarySection" class="mt-3 d-none">
+    <h5>Your Shopping Summary</h5>
+    <div id="summaryContent" class="card p-3"></div>
+  </div>
+
+  <!-- Troubleshooting -->
+  <div class="card mt-4 p-3">
+    <h6>🔧 Camera Troubleshooting (for setup & debugging)</h6>
+    <div class="d-flex gap-2 mb-2">
+      <button id="btnCheckLib" class="btn btn-outline-secondary btn-sm">Check Library</button>
+      <button id="btnEnum" class="btn btn-outline-secondary btn-sm">List Cameras</button>
+      <button id="btnGetUserMedia" class="btn btn-outline-secondary btn-sm">Test Camera</button>
+      <button id="btnTryAll" class="btn btn-outline-primary btn-sm">Auto Fix Camera</button>
+    </div>
+    <div id="debugVideo" class="mb-2"></div>
+    <div id="troubleshootLog" class="mb-2"></div>
   </div>
 </div>
 
-<!-- Session Started Modal -->
+<!-- Session confirmation modal -->
 <div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-body text-center">
-        <h5>✅ Session Started</h5>
-        <p>Welcome! Press “Scan QR in Zones” to begin exploring product recommendations.</p>
-        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Continue</button>
-      </div>
+    <div class="modal-content p-3 text-center">
+      <h5 class="mb-2">✅ Session Started</h5>
+      <p class="mb-3">You're all set! Tap <strong>Scan QR in Zone</strong> to explore recommendations.</p>
+      <button class="btn btn-primary" data-bs-dismiss="modal">Let's Go</button>
     </div>
   </div>
 </div>
 
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
+/* ===== Backend URL ===== */
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
-let html5QrCode;
-let customerId = "";
-let focus = "";
 
-// Elements
-const loginSection = document.getElementById("loginSection");
-const mainScreen = document.getElementById("mainScreen");
-const scanQRBtn = document.getElementById("scanQRBtn");
-const viewSummaryBtn = document.getElementById("viewSummaryBtn");
-const readerDiv = document.getElementById("reader");
-const recommendationsSection = document.getElementById("recommendationsSection");
-const recommendationsContainer = document.getElementById("recommendations");
-const summarySection = document.getElementById("summarySection");
-const summaryContent = document.getElementById("summaryContent");
+/* ===== UI Elements ===== */
+const loginSection = document.getElementById('loginSection');
+const mainScreen = document.getElementById('mainScreen');
+const startSessionBtn = document.getElementById('startSession');
+const scanQRBtn = document.getElementById('scanQRBtn');
+const viewSummaryBtn = document.getElementById('viewSummaryBtn');
+const readerDiv = document.getElementById('reader');
+const recommendationsSection = document.getElementById('recommendationsSection');
+const recommendationsContainer = document.getElementById('recommendations');
+const summarySection = document.getElementById('summarySection');
+const summaryContent = document.getElementById('summaryContent');
+const btnCheckLib = document.getElementById('btnCheckLib');
+const btnEnum = document.getElementById('btnEnum');
+const btnGetUserMedia = document.getElementById('btnGetUserMedia');
+const btnTryAll = document.getElementById('btnTryAll');
+const debugVideo = document.getElementById('debugVideo');
+const logBox = document.getElementById('troubleshootLog');
 
-window.addEventListener("DOMContentLoaded", () => {
-  // Start session
-  document.getElementById("startSession").addEventListener("click", async () => {
-    customerId = document.getElementById("customerId").value.trim();
-    focus = document.getElementById("focus").value;
-    if (!customerId) return alert("Please enter Customer ID.");
+let html5QrCode = null;
+let customerId = '';
+let focus = '';
 
-    try {
-      console.log("Starting session...");
-      await jsonp(`${BACKEND_URL}?action=startSession&customerId=${customerId}&focus=${focus}`);
-      console.log("Session started successfully.");
-      loginSection.classList.add("d-none");
-      mainScreen.classList.remove("d-none");
-      const modal = new bootstrap.Modal(document.getElementById("sessionModal"));
-      modal.show();
-    } catch (err) {
-      console.error("Session start failed:", err);
-      alert("Failed to start session. Please check your internet or backend link.");
-    }
+/* ===== Helper: Log & Explain Errors ===== */
+function log(msg, type='info') {
+  const ts = new Date().toLocaleTimeString();
+  const prefix = type === 'error' ? '❌' : type === 'warn' ? '⚠️' : 'ℹ️';
+  logBox.textContent += `[${ts}] ${prefix} ${msg}\n`;
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function explainError(err) {
+  const s = String(err || '').toLowerCase();
+  if (s.includes('permission')) return 'Camera access denied — allow camera in browser settings.';
+  if (s.includes('not found')) return 'No camera found — check connection or try switching camera.';
+  if (s.includes('https')) return 'Use HTTPS or localhost to allow camera access.';
+  if (s.includes('html5qrcode')) return 'QR scanner library missing — try reloading.';
+  return 'Unknown error — check logs below.';
+}
+
+/* ===== JSONP Utility ===== */
+function jsonp(url) {
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Math.round(Math.random()*1e9);
+    window[cb] = (data) => { delete window[cb]; resolve(data); };
+    const script = document.createElement('script');
+    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`;
+    script.onerror = () => reject(new Error('Network or JSONP error'));
+    document.body.appendChild(script);
   });
+}
 
-  scanQRBtn.addEventListener("click", startScanner);
-  viewSummaryBtn.addEventListener("click", loadSummary);
+/* ===== Start Session ===== */
+startSessionBtn.addEventListener('click', async () => {
+  customerId = document.getElementById('customerId').value.trim();
+  focus = document.getElementById('focus').value;
+  if (!customerId) return alert('Please enter your Member ID.');
+
+  try {
+    await jsonp(`${BACKEND_URL}?action=startSession&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(focus)}`);
+    loginSection.classList.add('d-none');
+    mainScreen.classList.remove('d-none');
+    const modal = new bootstrap.Modal(document.getElementById('sessionModal'));
+    modal.show();
+  } catch (err) {
+    log('Session start failed: ' + err, 'error');
+    alert('Could not start session. Check your connection.');
+  }
 });
 
-// --- Scanner ---
-async function startScanner() {
-  console.log("Starting QR scanner...");
-  try {
-    if (typeof Html5Qrcode === "undefined") throw new Error("QR library not loaded!");
-    if (!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+/* ===== Scan QR ===== */
+scanQRBtn.addEventListener('click', () => startScannerTryAll());
 
-    readerDiv.style.display = "block";
-    scanQRBtn.disabled = true;
+async function startScannerTryAll() {
+  if (typeof Html5Qrcode === 'undefined') {
+    log('Loading QR library...');
+    await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js');
+  }
 
-    await html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
-      async (decodedText) => {
-        console.log("QR code detected:", decodedText);
+  if (!html5QrCode) html5QrCode = new Html5Qrcode('reader');
+  readerDiv.style.display = 'block';
+  scanQRBtn.disabled = true;
+
+  const options = [{ facingMode:'environment' }, { facingMode:'user' }, {}];
+
+  for (const opt of options) {
+    try {
+      await html5QrCode.start(opt, { fps:10, qrbox:250 }, async (decodedText) => {
         await html5QrCode.stop();
-        html5QrCode.clear();
-        readerDiv.style.display = "none";
+        readerDiv.style.display = 'none';
         scanQRBtn.disabled = false;
-
         const recs = await fetchRecommendations(decodedText);
         displayProducts(recs);
-      },
-      (err) => console.warn("Scan error:", err)
-    );
-  } catch (err) {
-    console.error("Camera/QR error:", err);
-    alert("Camera failed: " + err.message + "\nTry refreshing or checking camera permission.");
-    readerDiv.style.display = "none";
-    scanQRBtn.disabled = false;
+      });
+      log('Camera started successfully.');
+      return;
+    } catch (err) {
+      log('Camera option failed: ' + explainError(err), 'warn');
+    }
   }
+
+  log('All camera options failed.', 'error');
+  alert('No working camera found. Please check settings.');
+  scanQRBtn.disabled = false;
 }
 
-// --- Recommendations ---
-async function fetchRecommendations(token) {
-  console.log("Fetching recommendations for token:", token);
+/* ===== Dynamic Script Loader ===== */
+function loadScript(src, timeout=5000) {
   return new Promise((resolve, reject) => {
-    const callbackName = "cb_" + Date.now();
-    window[callbackName] = (data) => {
-      delete window[callbackName];
-      console.log("Recommendations response:", data);
-      resolve(data.recommendations || []);
-    };
-    const script = document.createElement("script");
-    script.src = `${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}&customerId=${customerId}&focus=${focus}&callback=${callbackName}`;
-    script.onerror = (e) => { console.error("Recommendations fetch error:", e); reject(e); };
-    document.body.appendChild(script);
+    const s = document.createElement('script');
+    const to = setTimeout(() => reject(new Error('Timeout')), timeout);
+    s.onload = () => { clearTimeout(to); resolve(); };
+    s.onerror = () => { clearTimeout(to); reject(new Error('Load error')); };
+    s.src = src;
+    document.body.appendChild(s);
   });
 }
 
-// --- Click + Fetch Next ---
-async function recordClickAndFetchNext(productId) {
-  console.log("Recording click:", productId);
-  return new Promise((resolve, reject) => {
-    const callbackName = "cb_" + Date.now();
-    window[callbackName] = (data) => { delete window[callbackName]; resolve(data.recommendations || []); };
-    const script = document.createElement("script");
-    script.src = `${BACKEND_URL}?action=recordClick&customerId=${customerId}&productId=${productId}&callback=${callbackName}`;
-    script.onerror = (e) => { console.error("Click record error:", e); reject(e); };
-    document.body.appendChild(script);
-  });
+/* ===== Backend Calls ===== */
+function fetchRecommendations(token) {
+  return jsonp(`${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(focus)}`);
+}
+function recordClickAndFetchNext(productId) {
+  return jsonp(`${BACKEND_URL}?action=recordClick&customerId=${encodeURIComponent(customerId)}&productId=${encodeURIComponent(productId)}&segment=${encodeURIComponent(focus)}`);
 }
 
-// --- Display products ---
-function displayProducts(products) {
-  recommendationsSection.classList.remove("d-none");
-  recommendationsContainer.innerHTML = "";
+/* ===== Display Recommended Products ===== */
+function displayProducts(data) {
+  const products = data.recommendations || [];
+  recommendationsSection.classList.remove('d-none');
+  recommendationsContainer.innerHTML = '';
+
   if (!products.length) {
-    recommendationsContainer.innerHTML = `<p class="text-muted">No recommendations found.</p>`;
+    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations found for this area.</div>';
     return;
   }
 
   products.forEach(p => {
-    const card = document.createElement("div");
-    card.className = "col-md-4 product-card";
-    card.innerHTML = `
-      <div class="card h-100 shadow-sm text-center p-2">
-        <h6>${p.name}</h6>
-        <p class="small text-muted">${p.category || ""}</p>
-        <button class="btn btn-outline-primary btn-sm">View / Add</button>
+    const col = document.createElement('div');
+    col.className = 'col-md-4 product-card';
+    col.innerHTML = `
+      <div class="card h-100 shadow-sm p-2 text-center">
+        <h6>${escapeHtml(p.name)}</h6>
+        <p class="small text-muted mb-2">${escapeHtml(p.category)}</p>
+        <button class="btn btn-outline-primary btn-sm">Show Similar</button>
       </div>`;
-    card.querySelector("button").addEventListener("click", async () => {
+    col.querySelector('button').addEventListener('click', async () => {
       const recs = await recordClickAndFetchNext(p.productId);
       displayProducts(recs);
     });
-    recommendationsContainer.appendChild(card);
+    recommendationsContainer.appendChild(col);
   });
 }
 
-// --- Summary ---
-function loadSummary() {
-  console.log("Loading summary...");
-  jsonp(`${BACKEND_URL}?action=getSummary&customerId=${customerId}`)
-    .then(data => {
-      console.log("Summary data:", data);
-      summarySection.classList.remove("d-none");
+/* ===== Summary ===== */
+viewSummaryBtn.addEventListener('click', async () => {
+  try {
+    const data = await jsonp(`${BACKEND_URL}?action=getSummary&customerId=${encodeURIComponent(customerId)}`);
+    const s = data.summary?.[customerId] || {};
+    summarySection.classList.remove('d-none');
+    summaryContent.innerHTML = `
+      <p><strong>Nutrition:</strong> ${s.Nutrition ? `Calories ${s.Nutrition.calories}, Protein ${s.Nutrition.protein}, Sugar ${s.Nutrition.sugar}` : 'No data yet.'}</p>
+      <p><strong>Budget:</strong> ฿${s.Budget?.total ? s.Budget.total.toFixed(2) : '0.00'}</p>
+      <p><strong>Household Items:</strong> ${s.Household?.checklist?.join(', ') || 'None'}</p>`;
+  } catch (err) {
+    log('Summary load failed: ' + err, 'error');
+    alert('Could not load summary. Try again later.');
+  }
+});
 
-      const s = (data.summary && data.summary[customerId]) ? data.summary[customerId] : {};
-      const nutrition = s.Nutrition || {};
-      const budget = s.Budget || {};
-      const household = s.Household || {};
-
-      summaryContent.innerHTML = `
-        <p><strong>Nutrition:</strong> Calories ${nutrition.calories || 0}, Protein ${nutrition.protein || 0}, Sugar ${nutrition.sugar || 0}</p>
-        <p><strong>Budget:</strong> ${budget.total || 0}</p>
-        <p><strong>Household:</strong> ${(household.checklist || []).join(", ") || "None"}</p>
-      `;
-    })
-    .catch(err => {
-      console.error("Summary error:", err);
-      alert("Failed to load summary: " + err.message);
-    });
+function escapeHtml(s='') {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// --- JSONP helper ---
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const callbackName = "jsonp_cb_" + Math.floor(Math.random() * 100000);
-    window[callbackName] = (data) => {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    const script = document.createElement("script");
-    script.src = `${url}&callback=${callbackName}`;
-    script.onerror = (e) => { console.error("JSONP error:", e); reject(e); };
-    document.body.appendChild(script);
-  });
-}
+/* ===== Troubleshooting Buttons ===== */
+btnCheckLib.onclick = () => log(typeof Html5Qrcode !== 'undefined' ? 'QR library loaded ✅' : 'QR library missing ⚠️');
+btnEnum.onclick = async () => {
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const cams = devs.filter(d => d.kind === 'videoinput');
+  if (!cams.length) return log('No cameras found.');
+  cams.forEach((c,i) => log(`Camera #${i+1}: ${c.label}`));
+};
+btnGetUserMedia.onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video:true });
+    const v = document.createElement('video');
+    v.autoplay = true; v.playsInline = true; v.srcObject = stream;
+    debugVideo.style.display='block';
+    debugVideo.innerHTML=''; debugVideo.appendChild(v);
+    log('Camera test passed ✅');
+  } catch (err) {
+    log('Camera test failed: '+explainError(err), 'error');
+  }
+};
+btnTryAll.onclick = () => startScannerTryAll();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-
-
-
