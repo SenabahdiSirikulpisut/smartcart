@@ -84,7 +84,7 @@
   </div>
 </div>
 
-<!-- Session confirmation modal (we'll blur focus before showing to avoid aria-hidden focus warning) -->
+<!-- Session confirmation modal -->
 <div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content p-3 text-center">
@@ -99,8 +99,9 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-/* ======= Configuration & Backend URL ======= */
+/* ======= Backend URLs ======= */
 const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
+const SMARTZONE_BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLiE55LUpcxMpHu9GQaVC4wfM4HMwLWBuv6ZCSBA1z4HrT0SFS4OZ9XpVT8p6orOgc1bOETY2G-NKVeundi4UiXmEdwRRjcYvaBI3GrGorpDMM9MeXaOOQEjuGoMCFhYT9B5rKMb1zgsm-DUOqWeTOZgshKjbMjVx6jxIYjfHJkpHWeCcmli6dK6J2L_aQJRwnar-TXsvzQuigLtsPMaFZfWcg-MmsQr71NXgFfNqSHlax9G-N-V_UPGgSucAcOBqHC5jBMBEFCn_EaCAHUielyFywHDxA&lib=MubZt12-Fao2DigIUokuc73sDzc8Et4gp";
 
 /* ======= UI refs ======= */
 const loginSection = document.getElementById('loginSection');
@@ -114,8 +115,6 @@ const recommendationsContainer = document.getElementById('recommendations');
 const summarySection = document.getElementById('summarySection');
 const summaryContent = document.getElementById('summaryContent');
 
-const btnCheckLib = document.getElementById('btnCheckLib');
-const btnEnum = document.getElementById('btnEnum');
 const btnGetUserMedia = document.getElementById('btnGetUserMedia');
 const btnTryAll = document.getElementById('btnTryAll');
 const debugVideo = document.getElementById('debugVideo');
@@ -125,42 +124,22 @@ let html5QrCode = null;
 let customerId = '';
 let focus = '';
 
-/* ======= Logging helpers with mapped troubleshooting messages ======= */
+/* ======= Logging helper ======= */
 function log(msg, type='info') {
   const ts = new Date().toLocaleTimeString();
   const prefix = type === 'error' ? '❌' : type === 'warn' ? '⚠️' : 'ℹ️';
   logBox.textContent += `[${ts}] ${prefix} ${msg}\n`;
   logBox.scrollTop = logBox.scrollHeight;
-  console[type === 'error' ? 'error' : type === 'warn' ? 'warn' : 'log'](msg);
 }
 
-function explainError(err) {
-  // Map likely errors to helpful messages
-  if (!err) return '';
-  const s = String(err).toLowerCase();
-  if (s.includes('not allowed') || s.includes('permission')) {
-    return 'Permission denied: user blocked camera. Ask user to allow camera in site settings (site must be HTTPS or localhost).';
-  }
-  if (s.includes('not found') || s.includes('could not start')) {
-    return 'No accessible camera: try different facingMode (user/environment), check OS camera settings and drivers.';
-  }
-  if (s.includes('http') && s.includes('denied')) {
-    return 'Mixed content or insecure context: page must be served over HTTPS (or localhost) to access camera.';
-  }
-  if (s.includes('html5qrcode') || s.includes('not defined')) {
-    return 'QR library missing; try reloading or use stable CDN (jsdelivr).';
-  }
-  return null;
-}
-
-/* ======= JSONP helper (used by your backend) ======= */
+/* ======= JSONP helper ======= */
 function jsonp(url) {
   return new Promise((resolve, reject) => {
-    const callbackName = 'cb_' + Math.round(Math.random()*1e9);
-    window[callbackName] = (data) => { delete window[callbackName]; script.remove(); resolve(data); };
+    const cb = 'cb_' + Math.round(Math.random()*1e9);
+    window[cb] = (data) => { delete window[cb]; resolve(data); };
     const script = document.createElement('script');
-    script.src = `${url}&callback=${callbackName}`;
-    script.onerror = (e) => { script.remove(); reject(new Error('Network/script load error')); };
+    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`;
+    script.onerror = () => { script.remove(); reject(new Error('JSONP script load error')); };
     document.body.appendChild(script);
   });
 }
@@ -173,7 +152,6 @@ startSessionBtn.addEventListener('click', async () => {
 
   try {
     await jsonp(`${BACKEND_URL}?action=startSession&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(focus)}`);
-    // blur any active element to avoid aria-hidden focus warning when modal appears
     if (document.activeElement) try { document.activeElement.blur(); } catch(e){/* ignore */ }
     loginSection.classList.add('d-none');
     mainScreen.classList.remove('d-none');
@@ -186,123 +164,105 @@ startSessionBtn.addEventListener('click', async () => {
   }
 });
 
-/* ======= Scan QR: reuse the working camera formula and robust checks ======= */
+/* ======= Scan QR: SmartZone recommendations ======= */
 scanQRBtn.addEventListener('click', () => startScannerTryAll());
 
 async function startScannerTryAll() {
-  // ensure the html5-qrcode library is loaded; try to dynamically load if not present
   if (typeof Html5Qrcode === 'undefined') {
-    log('Html5Qrcode not present — attempting dynamic load from jsDelivr...');
-    try {
-      await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js', 8000);
-      log('Html5Qrcode loaded dynamically.');
-    } catch (err) {
-      log('Failed to load html5-qrcode library: ' + err, 'error');
-      const expl = explainError(err) || 'Library load failed. Check network or CDN.';
-      alert('Cannot start scanner: ' + expl);
-      return;
-    }
+    await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js');
+    log('Html5Qrcode loaded dynamically.');
   }
 
-  // create scanner once
-  if (!html5QrCode) html5QrCode = new Html5Qrcode(/* element id */ 'reader');
+  if (!html5QrCode) html5QrCode = new Html5Qrcode('reader');
 
   readerDiv.style.display = 'block';
   scanQRBtn.disabled = true;
 
-  // list of camera constraints to try (proven working formula)
-  const cameraOptions = [
-    { facingMode: 'environment' },
-    { facingMode: 'user' },
-    // fallback to default device if both facingMode constraints fail
-    {}
-  ];
+  const cameraOptions = [{ facingMode: 'environment' }, { facingMode: 'user' }, {}];
 
   for (let opt of cameraOptions) {
     try {
-      log('Trying camera option: ' + JSON.stringify(opt));
       await html5QrCode.start(
         opt,
         { fps: 10, qrbox: 250 },
         async (decodedText) => {
-          // single-scan mode: stop immediately
           try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){/* ignore */ }
           readerDiv.style.display = 'none';
           scanQRBtn.disabled = false;
           log('QR code scanned: ' + decodedText);
           try {
-            const recs = await fetchRecommendations(decodedText);
-            displayProducts(recs);
+            const recs = await fetchZoneRecommendations(decodedText);
+            displayZoneProducts(recs);
           } catch (e) {
-            log('Failed fetching recommendations: ' + e, 'error');
+            log('Failed fetching zone recommendations: ' + e, 'error');
           }
         },
-        (scanErr) => {
-          // scanning in progress — not an immediate failure
-          // we ignore per-frame errors
-        }
+        (scanErr) => {}
       );
-      log('Camera started successfully with option: ' + JSON.stringify(opt));
-      // if successful, exit the try loop (scanner is running until it finds QR)
       return;
-    } catch (err) {
-      const explanation = explainError(err) || 'Camera start failed for this option.';
-      log(`Camera option failed (${JSON.stringify(opt)}): ${err} — ${explanation}`, 'warn');
-      // try next constraint
-      continue;
-    }
+    } catch (err) { continue; }
   }
-
-  // if reached here, no camera started
   log('All camera options failed — unable to start scanner.', 'error');
-  alert('Unable to access any camera. See Troubleshooting log for suggestions.');
   scanQRBtn.disabled = false;
 }
 
-/* Helper: dynamic script loader with timeout */
-function loadScript(src, timeout = 5000) {
+function loadScript(src) {
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    let settled = false;
-    const to = setTimeout(() => {
-      if (!settled) { settled = true; s.remove(); reject(new Error('Script load timeout')); }
-    }, timeout);
-    s.onload = () => { if (!settled) { settled = true; clearTimeout(to); resolve(); } };
-    s.onerror = (e) => { if (!settled) { settled = true; clearTimeout(to); s.remove(); reject(new Error('Script load error')); } };
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Script load error'));
     s.src = src;
     document.body.appendChild(s);
   });
 }
 
-/* ======= Recommendations / backend calls (JSONP) ======= */
-function fetchRecommendations(token) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.round(Math.random()*1e9);
-    window[cb] = (data) => { delete window[cb]; resolve(data.recommendations || []); };
-    const script = document.createElement('script');
-    script.src = `${BACKEND_URL}?action=getRecommendations&productId=${encodeURIComponent(token)}&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(focus)}&callback=${cb}`;
-    script.onerror = (e) => { script.remove(); reject(new Error('Network or backend error')); };
-    document.body.appendChild(script);
-  });
+/* ======= Fetch SmartZone Recommendations ======= */
+async function fetchZoneRecommendations(zoneId) {
+  try {
+    const data = await jsonp(`${SMARTZONE_BACKEND_URL}?action=getZoneRecommendations&zoneId=${encodeURIComponent(zoneId)}`);
+    return data.recommendations || [];
+  } catch (err) {
+    log('Failed fetching zone recommendations: ' + err, 'error');
+    return [];
+  }
 }
 
-function recordClickAndFetchNext(productId) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.round(Math.random()*1e9);
-    window[cb] = (data) => { delete window[cb]; resolve(data.recommendations || []); };
-    const script = document.createElement('script');
-    script.src = `${BACKEND_URL}?action=recordClick&customerId=${encodeURIComponent(customerId)}&productId=${encodeURIComponent(productId)}&segment=${encodeURIComponent(focus)}&callback=${cb}`;
-    script.onerror = (e) => { script.remove(); reject(new Error('Network or backend error')); };
-    document.body.appendChild(script);
-  });
+/* ======= Display SmartZone products ======= */
+function displayZoneProducts(products) {
+  recommendationsSection.classList.remove('d-none');
+  recommendationsContainer.innerHTML = '';
+  if (!products.length) {
+    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations for this zone.</div>';
+    return;
+  }
+  for (const p of products) {
+    const col = document.createElement('div');
+    col.className = 'col-md-4 product-card';
+    col.innerHTML = `
+      <div class="card h-100 shadow-sm p-2 text-center">
+        <img src="${p.image || 'https://via.placeholder.com/100'}" class="img-fluid mb-2" />
+        <h6>${escapeHtml(p.name)}</h6>
+        <p class="small text-muted mb-2">${escapeHtml(p.category || '')}</p>
+        <p class="mb-1">Price: ฿${p.price}</p>
+        <p class="mb-1 text-success">${p.promotion || ''}</p>
+        <button class="btn btn-outline-primary btn-sm">Add</button>
+      </div>`;
+    col.querySelector('button').addEventListener('click', async () => {
+      try {
+        const recs = await recordClickAndFetchNext(p.productId);
+        displayProducts(recs);
+      } catch (err) { log('Error recording click: ' + err, 'error'); }
+    });
+    recommendationsContainer.appendChild(col);
+  }
 }
 
-/* ======= UI for product list ======= */
+/* ======= Existing Proto 1 Functions ======= */
 function displayProducts(products) {
   recommendationsSection.classList.remove('d-none');
   recommendationsContainer.innerHTML = '';
-  if (!products || products.length === 0) {
-    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations found for this zone.</div>';
+  if (!products || !products.length) {
+    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations found.</div>';
     return;
   }
   for (const p of products) {
@@ -318,15 +278,24 @@ function displayProducts(products) {
       try {
         const recs = await recordClickAndFetchNext(p.productId);
         displayProducts(recs);
-      } catch (err) {
-        log('Error recording click: ' + err, 'error');
-      }
+      } catch (err) { log('Error recording click: ' + err, 'error'); }
     });
     recommendationsContainer.appendChild(col);
   }
 }
 
-/* ======= Summary load ======= */
+function recordClickAndFetchNext(productId) {
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Math.round(Math.random()*1e9);
+    window[cb] = (data) => { delete window[cb]; resolve(data.recommendations || []); };
+    const script = document.createElement('script');
+    script.src = `${BACKEND_URL}?action=recordClick&customerId=${encodeURIComponent(customerId)}&productId=${encodeURIComponent(productId)}&segment=${encodeURIComponent(focus)}&callback=${cb}`;
+    script.onerror = () => { script.remove(); reject(new Error('Network or backend error')); };
+    document.body.appendChild(script);
+  });
+}
+
+/* ======= Summary ======= */
 viewSummaryBtn.addEventListener('click', () => loadSummary());
 function loadSummary() {
   jsonp(`${BACKEND_URL}?action=getSummary&customerId=${encodeURIComponent(customerId)}`)
@@ -338,43 +307,16 @@ function loadSummary() {
         <p><strong>Budget:</strong> ฿${(s.Budget?.total || 0).toFixed ? (s.Budget.total).toFixed(2) : (s.Budget?.total||0)}</p>
         <p><strong>Household:</strong> ${(s.Household?.checklist?.join(', ') || 'None')}</p>
       `;
-    })
-    .catch(err => {
-      log('Failed to load summary: ' + err, 'error');
-      alert('Could not load summary. Check network.');
-    });
+    }).catch(err => { log('Failed to load summary: ' + err, 'error'); });
 }
 
-/* Small helper to escape HTML when building DOM from data */
+/* ======= Utility ======= */
 function escapeHtml(s = '') {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ======= Troubleshooting buttons functionality ======= */
-btnCheckLib.addEventListener('click', () => {
-  if (typeof Html5Qrcode !== 'undefined') {
-    log('Html5Qrcode is loaded and available.');
-  } else {
-    log('Html5Qrcode is NOT present.', 'warn');
-    log('You can try dynamic load — press "Try All Camera Options" or reload the page.', 'info');
-  }
-});
-
-btnEnum.addEventListener('click', async () => {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const cams = devices.filter(d => d.kind === 'videoinput');
-    if (cams.length === 0) log('No video input devices found. Ensure camera is connected and allowed.');
-    cams.forEach((c,i) => log(`Camera #${i+1}: ${c.label || c.deviceId}`));
-  } catch (err) {
-    log('enumerateDevices error: ' + err, 'error');
-    const expl = explainError(err) || '';
-    log(expl, 'info');
-  }
-});
-
+/* ======= Troubleshooting ======= */
 btnGetUserMedia.addEventListener('click', async () => {
-  // quick getUserMedia test (shows feed in debugVideo)
   debugVideo.style.display = 'block';
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -383,28 +325,11 @@ btnGetUserMedia.addEventListener('click', async () => {
     v.srcObject = stream;
     debugVideo.innerHTML = '';
     debugVideo.appendChild(v);
-    log('getUserMedia success — preview running. This proves camera access works.');
-  } catch (err) {
-    log('getUserMedia error: ' + err, 'error');
-    const expl = explainError(err);
-    if (expl) log('Suggested fix: ' + expl, 'info');
-  }
+    log('getUserMedia success — preview running.');
+  } catch (err) { log('getUserMedia error: ' + err, 'error'); }
 });
 
 btnTryAll.addEventListener('click', () => startScannerTryAll());
-
-/* ======= Utility JSONP wrapper used by summary etc. (safe) ======= */
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.round(Math.random()*1e9);
-    window[cb] = (data) => { delete window[cb]; resolve(data); };
-    const script = document.createElement('script');
-    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`;
-    script.onerror = () => { script.remove(); reject(new Error('JSONP script load error')); };
-    document.body.appendChild(script);
-  });
-}
-
 </script>
 </body>
 </html>
