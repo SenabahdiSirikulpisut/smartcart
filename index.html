@@ -4,19 +4,16 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>SmartCart 7-Eleven</title>
-
-<!-- Tiny data-icon to avoid favicon 404 -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8D%90%3C/text%3E%3C/svg%3E">
-
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-
 <style>
-  body { background: #f8f9fa; padding: 1rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-  #reader, #debugVideo { width: 100%; max-width: 420px; margin: 0 auto 1rem auto; border-radius: 12px; overflow:hidden; display:none; background:#000; }
-  .product-card { transition: transform .14s ease-in-out; }
-  .product-card:hover { transform: translateY(-4px); }
-  #troubleshootLog { height:160px; overflow:auto; background:#fff; border:1px solid #eee; padding:.5rem; font-size:.875rem; }
-  .muted-small { font-size:.85rem; color:#6c757d; }
+body { background: #f8f9fa; padding: 1rem; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+#reader, #debugVideo { width: 100%; max-width: 420px; margin: 0 auto 1rem auto; border-radius: 12px; overflow:hidden; display:none; background:#000; }
+.product-card { transition: transform .14s ease-in-out; }
+.product-card:hover { transform: translateY(-4px); }
+#troubleshootLog { height:160px; overflow:auto; background:#fff; border:1px solid #eee; padding:.5rem; font-size:.875rem; }
+.muted-small { font-size:.85rem; color:#6c757d; }
+.filter-section { margin-bottom: 1rem; }
 </style>
 </head>
 <body class="container py-4">
@@ -25,95 +22,83 @@
 
 <!-- Login Section -->
 <div id="loginSection" class="card p-3 mb-3 shadow-sm">
-  <div class="mb-2">
-    <label class="form-label">Customer ID</label>
-    <input id="customerId" class="form-control" placeholder="e.g. C12345" />
-  </div>
-  <div class="mb-2">
-    <label class="form-label">Shopping Focus</label>
-    <select id="focus" class="form-select">
-      <option>Nutrition</option>
-      <option>Budget</option>
-      <option>Household</option>
-    </select>
-  </div>
   <button id="startSession" class="btn btn-primary w-100">Start Session</button>
-  <div class="mt-2 muted-small">After starting a session you'll see a blank main screen with Scan + Summary.</div>
+  <div class="mt-2 muted-small">Session will initialize the SmartCart experience.</div>
 </div>
 
 <!-- Main Screen -->
 <div id="mainScreen" class="d-none">
+
+  <!-- QR + Filter -->
   <div class="d-flex gap-2 mb-3">
     <button id="scanQRBtn" class="btn btn-success flex-grow-1">Scan QR in Zones</button>
-    <button id="viewSummaryBtn" class="btn btn-info">View Summary</button>
+    <button id="toggleFiltersBtn" class="btn btn-warning">Filters</button>
+    <button id="viewCartBtn" class="btn btn-info">View Cart</button>
   </div>
 
   <div id="reader" class="shadow"></div>
 
+  <!-- Filter Section -->
+  <div id="filterSection" class="filter-section d-none card p-3 mb-3">
+    <h6>Nutrition Filter</h6>
+    <div class="row g-2">
+      <div class="col"><input type="number" id="maxCalories" class="form-control" placeholder="Max Calories"></div>
+      <div class="col"><input type="number" id="minProtein" class="form-control" placeholder="Min Protein"></div>
+      <div class="col"><input type="number" id="maxSugar" class="form-control" placeholder="Max Sugar"></div>
+      <div class="col-auto"><button id="applyFilterBtn" class="btn btn-primary">Apply</button></div>
+    </div>
+  </div>
+
+  <!-- Recommendations -->
   <div id="recommendationsSection" class="mt-3 d-none">
     <h5>Recommended Products</h5>
     <div id="recommendations" class="row g-3"></div>
+    <button id="closeProductRecs" class="btn btn-secondary mt-2 d-none">Close Recommendations</button>
   </div>
 
-  <div id="summarySection" class="mt-3 d-none">
-    <h5>Session Summary</h5>
-    <div id="summaryContent" class="card p-3"></div>
+  <!-- Cart -->
+  <div id="cartSection" class="mt-3 d-none">
+    <h5>Your Cart</h5>
+    <div id="cartContent" class="card p-3 mb-3"></div>
+    <div class="text-end"><strong>Total: ฿<span id="cartTotal">0</span></strong></div>
   </div>
 
   <!-- Troubleshooting panel -->
   <div class="card mt-4 p-3">
     <h6>Camera Troubleshooting</h6>
     <div class="d-flex gap-2 mb-2">
-      <button id="btnGetUserMedia" class="btn btn-outline-secondary btn-sm">Test Camera (getUserMedia)</button>
+      <button id="btnGetUserMedia" class="btn btn-outline-secondary btn-sm">Test Camera</button>
       <button id="btnTryAll" class="btn btn-outline-primary btn-sm">Try All Camera Options</button>
     </div>
-
     <div id="debugVideo" class="mb-2"></div>
-
     <div id="troubleshootLog" class="mb-2"></div>
-
-    <div class="muted-small">
-      <strong>Common errors explained:</strong>
-      <ul>
-        <li><em>Html5Qrcode not defined</em> — library didn't load. Use stable CDN or dynamic load.</li>
-        <li><em>Permission denied</em> — user blocked camera; clear site permissions and retry (HTTPS required).</li>
-        <li><em>No video devices</em> — browser can't see cameras (driver or system problem).</li>
-        <li><em>Mixed content</em> — page served over HTTP but device blocks camera (use HTTPS / localhost).</li>
-      </ul>
-    </div>
   </div>
+
 </div>
 
-<!-- Session confirmation modal -->
-<div class="modal fade" id="sessionModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content p-3 text-center">
-      <h5 class="mb-2">✅ Session Started</h5>
-      <p class="mb-3">You're good to go — press <strong>Scan QR in Zones</strong> to open the camera.</p>
-      <button class="btn btn-primary" data-bs-dismiss="modal">Continue</button>
-    </div>
-  </div>
-</div>
-
-<!-- Load bootstrap JS at end -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
 <script>
 /* ======= Backend URLs ======= */
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxfGHWQWxeMyQyi40iYq9vWRO1tSfl0ADSN-mOflDamZ5YrGR5HCGI6Dy0Ga45Nf-0Dsw/exec";
-const SMARTZONE_BACKEND_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLiE55LUpcxMpHu9GQaVC4wfM4HMwLWBuv6ZCSBA1z4HrT0SFS4OZ9XpVT8p6orOgc1bOETY2G-NKVeundi4UiXmEdwRRjcYvaBI3GrGorpDMM9MeXaOOQEjuGoMCFhYT9B5rKMb1zgsm-DUOqWeTOZgshKjbMjVx6jxIYjfHJkpHWeCcmli6dK6J2L_aQJRwnar-TXsvzQuigLtsPMaFZfWcg-MmsQr71NXgFfNqSHlax9G-N-V_UPGgSucAcOBqHC5jBMBEFCn_EaCAHUielyFywHDxA&lib=MubZt12-Fao2DigIUokuc73sDzc8Et4gp";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyyYqz8OinQkd9H1r29UIA4Cg72j4OgAwVzxwn81mQxNsctU8qcnKeM3yrWjYqCnJeJyA/exec"; // GAS new backend
 
 /* ======= UI refs ======= */
 const loginSection = document.getElementById('loginSection');
 const mainScreen = document.getElementById('mainScreen');
 const startSessionBtn = document.getElementById('startSession');
 const scanQRBtn = document.getElementById('scanQRBtn');
-const viewSummaryBtn = document.getElementById('viewSummaryBtn');
+const toggleFiltersBtn = document.getElementById('toggleFiltersBtn');
+const applyFilterBtn = document.getElementById('applyFilterBtn');
+const closeProductRecsBtn = document.getElementById('closeProductRecs');
+const viewCartBtn = document.getElementById('viewCartBtn');
+
 const readerDiv = document.getElementById('reader');
 const recommendationsSection = document.getElementById('recommendationsSection');
 const recommendationsContainer = document.getElementById('recommendations');
-const summarySection = document.getElementById('summarySection');
-const summaryContent = document.getElementById('summaryContent');
+const filterSection = document.getElementById('filterSection');
+
+const cartSection = document.getElementById('cartSection');
+const cartContent = document.getElementById('cartContent');
+const cartTotal = document.getElementById('cartTotal');
 
 const btnGetUserMedia = document.getElementById('btnGetUserMedia');
 const btnTryAll = document.getElementById('btnTryAll');
@@ -121,215 +106,179 @@ const debugVideo = document.getElementById('debugVideo');
 const logBox = document.getElementById('troubleshootLog');
 
 let html5QrCode = null;
-let customerId = '';
-let focus = '';
+let sessionId = '';
+let activeZoneId = '';
+let filters = { maxCalories:null, minProtein:null, maxSugar:null };
 
-/* ======= Logging helper ======= */
+/* ======= Logging ======= */
 function log(msg, type='info') {
   const ts = new Date().toLocaleTimeString();
-  const prefix = type === 'error' ? '❌' : type === 'warn' ? '⚠️' : 'ℹ️';
+  const prefix = type==='error'?'❌':type==='warn'?'⚠️':'ℹ️';
   logBox.textContent += `[${ts}] ${prefix} ${msg}\n`;
   logBox.scrollTop = logBox.scrollHeight;
 }
 
 /* ======= JSONP helper ======= */
-function jsonp(url) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.round(Math.random()*1e9);
-    window[cb] = (data) => { delete window[cb]; resolve(data); };
-    const script = document.createElement('script');
-    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${cb}`;
-    script.onerror = () => { script.remove(); reject(new Error('JSONP script load error')); };
+function jsonp(url){
+  return new Promise((resolve,reject)=>{
+    const cb='cb_'+Math.round(Math.random()*1e9);
+    window[cb]=(data)=>{delete window[cb];resolve(data);};
+    const script=document.createElement('script');
+    script.src=`${url}${url.includes('?')?'&':'?'}callback=${cb}`;
+    script.onerror=()=>{script.remove();reject(new Error('JSONP load error'))};
     document.body.appendChild(script);
   });
 }
 
 /* ======= Session Start ======= */
-startSessionBtn.addEventListener('click', async () => {
-  customerId = document.getElementById('customerId').value.trim();
-  focus = document.getElementById('focus').value;
-  if (!customerId) { alert('Please enter Customer ID.'); return; }
-
-  try {
-    await jsonp(`${BACKEND_URL}?action=startSession&customerId=${encodeURIComponent(customerId)}&segment=${encodeURIComponent(focus)}`);
-    if (document.activeElement) try { document.activeElement.blur(); } catch(e){/* ignore */ }
+startSessionBtn.addEventListener('click', async()=>{
+  try{
+    const res = await jsonp(`${BACKEND_URL}?action=startSession`);
+    sessionId = res.sessionId;
     loginSection.classList.add('d-none');
     mainScreen.classList.remove('d-none');
-    const modal = new bootstrap.Modal(document.getElementById('sessionModal'));
-    modal.show();
-    log('Session started successfully.');
-  } catch (err) {
-    log('Failed to start session: ' + err, 'error');
-    alert('Failed to start session. Check network and backend URL.');
-  }
+    log('Session started: ' + sessionId);
+  }catch(err){log('Failed to start session: '+err,'error');}
 });
 
-/* ======= Scan QR: SmartZone recommendations ======= */
-scanQRBtn.addEventListener('click', () => startScannerTryAll());
+/* ======= Toggle Filter ======= */
+toggleFiltersBtn.addEventListener('click', ()=>filterSection.classList.toggle('d-none'));
+applyFilterBtn.addEventListener('click', ()=>{
+  filters.maxCalories = Number(document.getElementById('maxCalories').value) || null;
+  filters.minProtein = Number(document.getElementById('minProtein').value) || null;
+  filters.maxSugar = Number(document.getElementById('maxSugar').value) || null;
+  if(activeZoneId) fetchAndDisplayZone(activeZoneId);
+});
 
-async function startScannerTryAll() {
-  if (typeof Html5Qrcode === 'undefined') {
+/* ======= Scan QR for Zone ======= */
+scanQRBtn.addEventListener('click', async()=>{
+  if(typeof Html5Qrcode==='undefined'){
     await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js');
-    log('Html5Qrcode loaded dynamically.');
+    log('Html5Qrcode loaded.');
   }
+  if(!html5QrCode) html5QrCode = new Html5Qrcode('reader');
+  readerDiv.style.display='block';
+  scanQRBtn.disabled=true;
+  html5QrCode.start({facingMode:'environment'}, {fps:10, qrbox:250},
+    async decoded=>{
+      try{await html5QrCode.stop(); html5QrCode.clear();}catch{}
+      readerDiv.style.display='none';
+      scanQRBtn.disabled=false;
+      activeZoneId=decoded;
+      fetchAndDisplayZone(decoded);
+    },
+    ()=>{}
+  );
+});
 
-  if (!html5QrCode) html5QrCode = new Html5Qrcode('reader');
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.onload=res;s.onerror=()=>rej(new Error('Script load'));s.src=src;document.body.appendChild(s);});}
 
-  readerDiv.style.display = 'block';
-  scanQRBtn.disabled = true;
-
-  const cameraOptions = [{ facingMode: 'environment' }, { facingMode: 'user' }, {}];
-
-  for (let opt of cameraOptions) {
-    try {
-      await html5QrCode.start(
-        opt,
-        { fps: 10, qrbox: 250 },
-        async (decodedText) => {
-          try { await html5QrCode.stop(); html5QrCode.clear(); } catch(e){/* ignore */ }
-          readerDiv.style.display = 'none';
-          scanQRBtn.disabled = false;
-          log('QR code scanned: ' + decodedText);
-          try {
-            const recs = await fetchZoneRecommendations(decodedText);
-            displayZoneProducts(recs);
-          } catch (e) {
-            log('Failed fetching zone recommendations: ' + e, 'error');
-          }
-        },
-        (scanErr) => {}
-      );
-      return;
-    } catch (err) { continue; }
-  }
-  log('All camera options failed — unable to start scanner.', 'error');
-  scanQRBtn.disabled = false;
+/* ======= Fetch & Display Zone Recommendations ======= */
+async function fetchAndDisplayZone(zoneId){
+  try{
+    let url = `${BACKEND_URL}?action=getZoneRecommendations&zoneId=${encodeURIComponent(zoneId)}`;
+    const data = await jsonp(url);
+    let recs = data.recommendations || [];
+    // Apply nutrition filters
+    recs = recs.filter(r=>{
+      const p = r.primary;
+      if(filters.maxCalories && p.calories>filters.maxCalories) return false;
+      if(filters.minProtein && p.protein<filters.minProtein) return false;
+      if(filters.maxSugar && p.sugar>filters.maxSugar) return false;
+      return true;
+    });
+    displayZoneProducts(recs);
+  }catch(err){log('Failed fetching zone recs: '+err,'error');}
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Script load error'));
-    s.src = src;
-    document.body.appendChild(s);
-  });
-}
-
-/* ======= Fetch SmartZone Recommendations ======= */
-async function fetchZoneRecommendations(zoneId) {
-  try {
-    const data = await jsonp(`${SMARTZONE_BACKEND_URL}?action=getZoneRecommendations&zoneId=${encodeURIComponent(zoneId)}`);
-    return data.recommendations || [];
-  } catch (err) {
-    log('Failed fetching zone recommendations: ' + err, 'error');
-    return [];
-  }
-}
-
-/* ======= Display SmartZone products ======= */
-function displayZoneProducts(products) {
+function displayZoneProducts(products){
   recommendationsSection.classList.remove('d-none');
-  recommendationsContainer.innerHTML = '';
-  if (!products.length) {
-    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations for this zone.</div>';
-    return;
-  }
-  for (const p of products) {
-    const col = document.createElement('div');
-    col.className = 'col-md-4 product-card';
-    col.innerHTML = `
+  recommendationsContainer.innerHTML='';
+  closeProductRecsBtn.classList.add('d-none');
+  if(!products.length){recommendationsContainer.innerHTML='<div class="text-muted">No products.</div>';return;}
+  products.forEach(p=>{
+    const col=document.createElement('div');
+    col.className='col-md-4 product-card';
+    col.innerHTML=`
       <div class="card h-100 shadow-sm p-2 text-center">
-        <img src="${p.image || 'https://via.placeholder.com/100'}" class="img-fluid mb-2" />
-        <h6>${escapeHtml(p.name)}</h6>
-        <p class="small text-muted mb-2">${escapeHtml(p.category || '')}</p>
-        <p class="mb-1">Price: ฿${p.price}</p>
-        <p class="mb-1 text-success">${p.promotion || ''}</p>
+        <img src="${p.primary.image||'https://via.placeholder.com/100'}" class="img-fluid mb-2"/>
+        <h6>${p.primary.name}</h6>
+        <p class="small text-muted mb-2">${p.primary.category||''}</p>
+        <p class="mb-1">Price: ฿${p.primary.price}</p>
+        <p class="mb-1 text-success">${p.primary.promotion||''}</p>
         <button class="btn btn-outline-primary btn-sm">Add</button>
       </div>`;
-    col.querySelector('button').addEventListener('click', async () => {
-      try {
-        const recs = await recordClickAndFetchNext(p.productId);
-        displayProducts(recs);
-      } catch (err) { log('Error recording click: ' + err, 'error'); }
-    });
+    col.querySelector('button').addEventListener('click',()=>handleProductClick(p.primary.productId));
     recommendationsContainer.appendChild(col);
-  }
-}
-
-/* ======= Existing Proto 1 Functions ======= */
-function displayProducts(products) {
-  recommendationsSection.classList.remove('d-none');
-  recommendationsContainer.innerHTML = '';
-  if (!products || !products.length) {
-    recommendationsContainer.innerHTML = '<div class="text-muted">No recommendations found.</div>';
-    return;
-  }
-  for (const p of products) {
-    const col = document.createElement('div');
-    col.className = 'col-md-4 product-card';
-    col.innerHTML = `
-      <div class="card h-100 shadow-sm p-2 text-center">
-        <h6>${escapeHtml(p.name || 'Unnamed')}</h6>
-        <p class="small text-muted mb-2">${escapeHtml(p.category || '')}</p>
-        <button class="btn btn-outline-primary btn-sm">View / Add</button>
-      </div>`;
-    col.querySelector('button').addEventListener('click', async () => {
-      try {
-        const recs = await recordClickAndFetchNext(p.productId);
-        displayProducts(recs);
-      } catch (err) { log('Error recording click: ' + err, 'error'); }
-    });
-    recommendationsContainer.appendChild(col);
-  }
-}
-
-function recordClickAndFetchNext(productId) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.round(Math.random()*1e9);
-    window[cb] = (data) => { delete window[cb]; resolve(data.recommendations || []); };
-    const script = document.createElement('script');
-    script.src = `${BACKEND_URL}?action=recordClick&customerId=${encodeURIComponent(customerId)}&productId=${encodeURIComponent(productId)}&segment=${encodeURIComponent(focus)}&callback=${cb}`;
-    script.onerror = () => { script.remove(); reject(new Error('Network or backend error')); };
-    document.body.appendChild(script);
   });
 }
 
-/* ======= Summary ======= */
-viewSummaryBtn.addEventListener('click', () => loadSummary());
-function loadSummary() {
-  jsonp(`${BACKEND_URL}?action=getSummary&customerId=${encodeURIComponent(customerId)}`)
-    .then(data => {
-      summarySection.classList.remove('d-none');
-      const s = data.summary && data.summary[customerId] || {};
-      summaryContent.innerHTML = `
-        <p><strong>Nutrition:</strong> Calories ${s.Nutrition?.calories || 0}, Protein ${s.Nutrition?.protein || 0}, Sugar ${s.Nutrition?.sugar || 0}</p>
-        <p><strong>Budget:</strong> ฿${(s.Budget?.total || 0).toFixed ? (s.Budget.total).toFixed(2) : (s.Budget?.total||0)}</p>
-        <p><strong>Household:</strong> ${(s.Household?.checklist?.join(', ') || 'None')}</p>
-      `;
-    }).catch(err => { log('Failed to load summary: ' + err, 'error'); });
+async function handleProductClick(productId){
+  closeProductRecsBtn.classList.remove('d-none');
+  try{
+    const data = await jsonp(`${BACKEND_URL}?action=recordClick&sessionId=${sessionId}&productId=${encodeURIComponent(productId)}`);
+    let recs = data.recommendations || [];
+    // Flatten bundles
+    const flatRecs = recs.map(r=>r.product);
+    displayProductRecommendations(flatRecs);
+  }catch(err){log('Error fetching product recs: '+err,'error');}
 }
 
-/* ======= Utility ======= */
-function escapeHtml(s = '') {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function displayProductRecommendations(products){
+  recommendationsContainer.innerHTML='';
+  if(!products.length){recommendationsContainer.innerHTML='<div class="text-muted">No further recommendations.</div>';return;}
+  products.forEach(p=>{
+    const col=document.createElement('div');
+    col.className='col-md-4 product-card';
+    col.innerHTML=`
+      <div class="card h-100 shadow-sm p-2 text-center">
+        <img src="${p.image||'https://via.placeholder.com/100'}" class="img-fluid mb-2"/>
+        <h6>${p.name}</h6>
+        <p class="small text-muted mb-2">${p.category||''}</p>
+        <p class="mb-1">Price: ฿${p.price}</p>
+        <button class="btn btn-outline-primary btn-sm">Add</button>
+      </div>`;
+    col.querySelector('button').addEventListener('click',()=>addToCart(p));
+    recommendationsContainer.appendChild(col);
+  });
+}
+
+closeProductRecsBtn.addEventListener('click',()=>{if(activeZoneId) fetchAndDisplayZone(activeZoneId);});
+
+/* ======= Cart ======= */
+let cart=[];
+function addToCart(product){
+  cart.push(product);
+  updateCartUI();
+}
+
+viewCartBtn.addEventListener('click',()=>cartSection.classList.toggle('d-none'));
+function updateCartUI(){
+  cartContent.innerHTML='';
+  let total=0;
+  cart.forEach((p,i)=>{
+    const row=document.createElement('div');
+    row.className='d-flex justify-content-between mb-1';
+    row.innerHTML=`<span>${p.name}</span><span>฿${p.price}</span>`;
+    cartContent.appendChild(row);
+    total+=Number(p.price||0);
+  });
+  cartTotal.textContent=total.toFixed(2);
 }
 
 /* ======= Troubleshooting ======= */
-btnGetUserMedia.addEventListener('click', async () => {
-  debugVideo.style.display = 'block';
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    const v = document.createElement('video');
-    v.autoplay = true; v.playsInline = true; v.muted = true;
-    v.srcObject = stream;
-    debugVideo.innerHTML = '';
-    debugVideo.appendChild(v);
-    log('getUserMedia success — preview running.');
-  } catch (err) { log('getUserMedia error: ' + err, 'error'); }
+btnGetUserMedia.addEventListener('click',async()=>{
+  debugVideo.style.display='block';
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    const v=document.createElement('video');v.autoplay=true;v.playsInline=true;v.muted=true;v.srcObject=stream;
+    debugVideo.innerHTML='';debugVideo.appendChild(v);
+    log('Camera preview running.');
+  }catch(err){log('getUserMedia error: '+err,'error');}
 });
 
-btnTryAll.addEventListener('click', () => startScannerTryAll());
+btnTryAll.addEventListener('click',()=>scanQRBtn.click());
 </script>
 </body>
 </html>
+
