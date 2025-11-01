@@ -32,6 +32,7 @@ body { background: #f8f9fa; padding: 1rem; font-family: Inter, system-ui, -apple
   <!-- QR + Filter -->
   <div class="d-flex gap-2 mb-3">
     <button id="scanQRBtn" class="btn btn-success flex-grow-1">Scan QR in Zones</button>
+    <button id="closeCameraBtn" class="btn btn-danger">Close Camera</button>
     <button id="toggleFiltersBtn" class="btn btn-warning">Filters</button>
     <button id="viewCartBtn" class="btn btn-info">View Cart</button>
   </div>
@@ -78,14 +79,15 @@ body { background: #f8f9fa; padding: 1rem; font-family: Inter, system-ui, -apple
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-/* ======= Backend URLs ======= */
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyyYqz8OinQkd9H1r29UIA4Cg72j4OgAwVzxwn81mQxNsctU8qcnKeM3yrWjYqCnJeJyA/exec"; // GAS new backend
+/* ======= Backend URL ======= */
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyyYqz8OinQkd9H1r29UIA4Cg72j4OgAwVzxwn81mQxNsctU8qcnKeM3yrWjYqCnJeJyA/exec";
 
-/* ======= UI refs ======= */
+/* ======= UI references ======= */
 const loginSection = document.getElementById('loginSection');
 const mainScreen = document.getElementById('mainScreen');
 const startSessionBtn = document.getElementById('startSession');
 const scanQRBtn = document.getElementById('scanQRBtn');
+const closeCameraBtn = document.getElementById('closeCameraBtn');
 const toggleFiltersBtn = document.getElementById('toggleFiltersBtn');
 const applyFilterBtn = document.getElementById('applyFilterBtn');
 const closeProductRecsBtn = document.getElementById('closeProductRecs');
@@ -110,8 +112,8 @@ let sessionId = '';
 let activeZoneId = '';
 let filters = { maxCalories:null, minProtein:null, maxSugar:null };
 
-/* ======= Logging ======= */
-function log(msg, type='info') {
+/* ======= Logging helper ======= */
+function log(msg, type='info'){
   const ts = new Date().toLocaleTimeString();
   const prefix = type==='error'?'❌':type==='warn'?'⚠️':'ℹ️';
   logBox.textContent += `[${ts}] ${prefix} ${msg}\n`;
@@ -150,7 +152,7 @@ applyFilterBtn.addEventListener('click', ()=>{
   if(activeZoneId) fetchAndDisplayZone(activeZoneId);
 });
 
-/* ======= Scan QR for Zone ======= */
+/* ======= Scan QR ======= */
 scanQRBtn.addEventListener('click', async()=>{
   if(typeof Html5Qrcode==='undefined'){
     await loadScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js');
@@ -171,6 +173,22 @@ scanQRBtn.addEventListener('click', async()=>{
   );
 });
 
+/* ======= Close Camera Button ======= */
+closeCameraBtn.addEventListener('click', async () => {
+  if (html5QrCode) {
+    try {
+      await html5QrCode.stop();
+      html5QrCode.clear();
+      readerDiv.style.display = 'none';
+      scanQRBtn.disabled = false;
+      log('Camera closed.');
+    } catch (err) {
+      log('Error closing camera: ' + err, 'error');
+    }
+  }
+});
+
+/* ======= Load Script helper ======= */
 function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.onload=res;s.onerror=()=>rej(new Error('Script load'));s.src=src;document.body.appendChild(s);});}
 
 /* ======= Fetch & Display Zone Recommendations ======= */
@@ -218,7 +236,6 @@ async function handleProductClick(productId){
   try{
     const data = await jsonp(`${BACKEND_URL}?action=recordClick&sessionId=${sessionId}&productId=${encodeURIComponent(productId)}`);
     let recs = data.recommendations || [];
-    // Flatten bundles
     const flatRecs = recs.map(r=>r.product);
     displayProductRecommendations(flatRecs);
   }catch(err){log('Error fetching product recs: '+err,'error');}
@@ -251,7 +268,6 @@ function addToCart(product){
   cart.push(product);
   updateCartUI();
 }
-
 viewCartBtn.addEventListener('click',()=>cartSection.classList.toggle('d-none'));
 function updateCartUI(){
   cartContent.innerHTML='';
@@ -266,7 +282,7 @@ function updateCartUI(){
   cartTotal.textContent=total.toFixed(2);
 }
 
-/* ======= Troubleshooting ======= */
+/* ======= Camera Troubleshooting ======= */
 btnGetUserMedia.addEventListener('click',async()=>{
   debugVideo.style.display='block';
   try{
@@ -281,4 +297,3 @@ btnTryAll.addEventListener('click',()=>scanQRBtn.click());
 </script>
 </body>
 </html>
-
