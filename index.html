@@ -162,7 +162,7 @@ async function fetchAndDisplayZone(zoneId){
 /* ======= Product-Level Recommendations ======= */
 async function handleProductClick(productId){
   try {
-    const data = await jsonp(`${BACKEND_URL}?action=getProductRecommendations&productId=${encodeURIComponent(productId)}`);
+    const data = await jsonp(`${BACKEND_URL}?action=getProductRecommendations&product_id=${encodeURIComponent(productId)}`);
     console.log('Product recommendations:', data);
 
     const bundles = data.bundle || [];
