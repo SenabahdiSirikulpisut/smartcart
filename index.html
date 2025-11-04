@@ -176,7 +176,7 @@ async function handleProductClick(productId){
   }
 }
 
-/* ======= Display Product Recommendations ======= */
+/* ======= Display Product Recommendations (patched) ======= */
 function displayProductRecommendations({ bundles = [], fbt = [] }) {
   recommendationsContainer.innerHTML = '';
 
@@ -185,16 +185,16 @@ function displayProductRecommendations({ bundles = [], fbt = [] }) {
     return;
   }
 
-  const makeCard = (p) => {
-    const prod = p.relatedProduct || p;
+  const makeCard = (item) => {
+    const p = item.relatedProduct || item.product || item;
     return `
       <div class="col-md-4 product-card">
         <div class="card h-100 shadow-sm p-2 text-center">
-          <img src="${prod.image || 'https://via.placeholder.com/100'}" class="img-fluid mb-2"/>
-          <h6>${prod.name}</h6>
-          <p class="small text-muted mb-2">${prod.category || ''}</p>
-          <p class="mb-1">฿${prod.price}</p>
-          <button class="btn btn-outline-primary btn-sm add-btn" data-id="${prod.productId}">Add</button>
+          <img src="${p.image || 'https://via.placeholder.com/100'}" class="img-fluid mb-2"/>
+          <h6>${p.name}</h6>
+          <p class="small text-muted mb-2">${p.category || ''}</p>
+          <p class="mb-1">฿${p.price}</p>
+          <button class="btn btn-outline-primary btn-sm add-btn" data-id="${p.productId}">Add</button>
         </div>
       </div>`;
   };
@@ -207,12 +207,19 @@ function displayProductRecommendations({ bundles = [], fbt = [] }) {
     recommendationsContainer.innerHTML += `<h6 class="mt-3">🤝 Frequently Bought Together</h6><div class="row g-3 mb-3">${fbt.map(makeCard).join('')}</div>`;
   }
 
+  // Attach Add buttons
   recommendationsContainer.querySelectorAll('.add-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const pid = btn.dataset.id;
       const all = [...bundles, ...fbt];
-      const match = all.find(p => (p.relatedProduct || p).productId === pid);
-      if (match) addToCart(match.relatedProduct || match);
+      const match = all.find(item => {
+        const p = item.relatedProduct || item.product || item;
+        return p.productId === pid;
+      });
+      if (match) {
+        const prod = match.relatedProduct || match.product || match;
+        addToCart(prod);
+      }
     });
   });
 }
@@ -267,4 +274,5 @@ function updateCart(){
 
 </body>
 </html>
+
 
