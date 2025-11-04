@@ -148,48 +148,79 @@ function loadScript(src){return new Promise((res,rej)=>{const s=document.createE
 /* ======= Zone Recommendations ======= */
 async function fetchAndDisplayZone(zoneId){
   const data = await jsonp(`${BACKEND_URL}?action=getZoneRecommendations&zoneId=${encodeURIComponent(zoneId)}`);
-  const recs = (data.recommendations||[]).map(r=>r.product).filter(p=>{
-    if(filters.maxCalories && p.calories>filters.maxCalories) return false;
-    if(filters.minProtein && p.protein<filters.minProtein) return false;
-    if(filters.maxSugar && p.sugar>filters.maxSugar) return false;
-    return true;
-  });
+  const recs = (data.recommendations||[]).map(r=>r.product).filter(filterProduct);
   renderProductCards(recs, "Zone Recommendations");
 }
 
-/* ======= Product-Level Recommendations (Fixed) ======= */
-async function handleProductClick(productId){
+/* ======= Product-Level Recommendations (Headered) ======= */
+async function handleProductClick(productId) {
   try {
     const data = await jsonp(`${BACKEND_URL}?action=getProductRecommendations&productId=${encodeURIComponent(productId)}`);
     console.log('Product recommendations:', data);
 
-    // Flatten bundles + FBT
-    const recs = [
-      ...(data.bundle || []).map(b => b.relatedProduct || b),
-      ...(data.frequently_bought_with || []).map(f => f.relatedProduct || f)
-    ].filter(p=>{
-      if(filters.maxCalories && p.calories>filters.maxCalories) return false;
-      if(filters.minProtein && p.protein<filters.minProtein) return false;
-      if(filters.maxSugar && p.sugar>filters.maxSugar) return false;
-      return true;
-    });
-
-    if(recs.length === 0){
-      recommendationsContainer.innerHTML = '<div class="text-muted">No further recommendations.</div>';
-    } else {
-      renderProductCards(recs, "Product Recommendations");
-    }
+    const bundles = (data.bundle || []).map(b => b.relatedProduct || b).filter(filterProduct);
+    const fbt = (data.frequently_bought_with || []).map(f => f.relatedProduct || f).filter(filterProduct);
 
     recommendationsSection.classList.remove('d-none');
     closeZoneRecsBtn.classList.add('d-none');
     closeProductRecsBtn.classList.remove('d-none');
+
+    displayProductRecommendations(bundles, fbt);
 
   } catch (err) {
     logBox.textContent += '\nError fetching product recs: ' + err.message;
   }
 }
 
-/* ======= Rendering Helper ======= */
+/* ======= Display Product Recommendations with Headers ======= */
+function displayProductRecommendations(bundles = [], fbt = []) {
+  recommendationsContainer.innerHTML = '';
+
+  if (!bundles.length && !fbt.length) {
+    recommendationsContainer.innerHTML = '<div class="text-muted">No further recommendations.</div>';
+    return;
+  }
+
+  const makeCard = (p) => {
+    return `
+      <div class="col-md-4 product-card">
+        <div class="card h-100 shadow-sm p-2 text-center">
+          <img src="${p.image || 'https://via.placeholder.com/100'}" class="img-fluid mb-2"/>
+          <h6>${p.name}</h6>
+          <p class="small text-muted mb-2">${p.category || ''}</p>
+          <p class="mb-1">฿${p.price}</p>
+          <button class="btn btn-outline-primary btn-sm add-btn" data-id="${p.productId}">Add</button>
+        </div>
+      </div>`;
+  };
+
+  if (bundles.length) {
+    recommendationsContainer.innerHTML += `<h6 class="mt-2">🍱 Bundle Set</h6><div class="row g-3 mb-3">${bundles.map(makeCard).join('')}</div>`;
+  }
+
+  if (fbt.length) {
+    recommendationsContainer.innerHTML += `<h6 class="mt-3">🤝 Frequently Bought Together</h6><div class="row g-3 mb-3">${fbt.map(makeCard).join('')}</div>`;
+  }
+
+  recommendationsContainer.querySelectorAll('.add-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pid = btn.dataset.id;
+      const allProducts = [...bundles, ...fbt];
+      const match = allProducts.find(p => p.productId === pid);
+      if (match) addToCart(match);
+    });
+  });
+}
+
+/* ======= Product Filter Helper ======= */
+function filterProduct(p) {
+  if (filters.maxCalories && p.calories > filters.maxCalories) return false;
+  if (filters.minProtein && p.protein < filters.minProtein) return false;
+  if (filters.maxSugar && p.sugar > filters.maxSugar) return false;
+  return true;
+}
+
+/* ======= Shared Rendering Helper ======= */
 function renderProductCards(products, title=""){
   recommendationsSection.classList.remove('d-none');
   recommendationsContainer.innerHTML = title ? `<h5>${title}</h5><div class="row g-3" id="recommendationsGrid"></div>` : '<div class="row g-3" id="recommendationsGrid"></div>';
@@ -239,4 +270,5 @@ function updateCart(){
 
 </body>
 </html>
+
 
